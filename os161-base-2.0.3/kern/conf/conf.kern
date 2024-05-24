@@ -445,8 +445,6 @@ file		test/fstest.c
 optfile net	test/nettest.c
 
 # added by me
-defoption syscalls
-options   syscalls
-optfile   syscalls syscall/file_syscalls.c
-optfile   syscalls syscall/proc_syscalls.c
+
+
 #defoption hello
