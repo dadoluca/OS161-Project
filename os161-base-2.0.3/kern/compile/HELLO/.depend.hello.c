@@ -11,5 +11,6 @@ hello.o: ../../main/hello.c ../../include/types.h \
  ../../include/proc.h ../../include/current.h \
  includelinks/machine/current.h ../../include/synch.h ../../include/vm.h \
  includelinks/machine/vm.h ../../include/mainbus.h ../../include/vfs.h \
- ../../include/device.h ../../include/syscall.h ../../include/test.h \
- ../../include/version.h autoconf.h ../../include/hello.h
+ ../../include/device.h ../../include/syscall.h opt-syscalls.h \
+ ../../include/test.h ../../include/version.h autoconf.h \
+ ../../include/hello.h

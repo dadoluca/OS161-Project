@@ -51,7 +51,7 @@
 #include <version.h>
 #include "autoconf.h"  // for pseudoconfig
 
-#include "opt-hello.h"
+//#include "opt-hello.h"
 #include "hello.h"
 
 /*

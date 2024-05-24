@@ -379,6 +379,8 @@ file      vfs/devnull.c
 file      syscall/loadelf.c
 file      syscall/runprogram.c
 file      syscall/time_syscalls.c
+#file      syscall/file_syscalls.c
+#file      syscall/proc_syscalls.c
 
 #
 # Startup and initialization
@@ -443,4 +445,8 @@ file		test/fstest.c
 optfile net	test/nettest.c
 
 # added by me
-defoption hello
+defoption syscalls
+options   syscalls
+optfile   syscalls syscall/file_syscalls.c
+optfile   syscalls syscall/proc_syscalls.c
+#defoption hello

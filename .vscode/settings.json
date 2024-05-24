@@ -3,6 +3,9 @@
         "autoconf.h": "c",
         "lib.h": "c",
         "opt-noasserts.h": "c",
-        "version.h": "c"
+        "version.h": "c",
+        "syscall.h": "c",
+        "trapframe.h": "c",
+        "thread.h": "c"
     }
 }
