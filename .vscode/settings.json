@@ -1,0 +1,9 @@
+{
+    "files.associations": {
+        "autoconf.h": "c",
+        "lib.h": "c",
+        "opt-noasserts.h": "c",
+        "version.h": "c",
+        "unistd.h": "c"
+    }
+}
