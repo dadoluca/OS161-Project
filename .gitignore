@@ -1,3 +1,7 @@
+tools/
+toolbuild/
+doxygen/
+
 # Prerequisites
 *.d
 
