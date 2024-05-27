@@ -33,7 +33,4 @@ options sfs			# Always use the file system
 
 options dumbvm			# Chewing gum and baling wire.
 
-defoption syscalls
 options   syscalls
-optfile   syscalls syscall/file_syscalls.c
-optfile   syscalls syscall/proc_syscalls.c

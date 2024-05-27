@@ -447,4 +447,8 @@ optfile net	test/nettest.c
 # added by me
 
 
-#defoption hello
+defoption hello
+
+defoption syscalls
+optfile   syscalls syscall/file_syscalls.c
+optfile   syscalls syscall/proc_syscalls.c
