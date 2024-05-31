@@ -30,12 +30,23 @@
 #ifndef _SYNCH_H_
 #define _SYNCH_H_
 
+
 /*
  * Header file for synchronization primitives.
  */
 
 
 #include <spinlock.h>
+
+/* ------------------------------------------------------------- */
+/* G.Cabodi - 2019 - implementing locks and CVs */
+/* option "synch" needed in conf.kern (and enabled!) */
+#include "opt-synch.h" 
+/* 1: implement lock as a binary semaphore (+ pointer to thread) 
+ * 0: lock implemented by wait channel
+ */
+#define USE_SEMAPHORE_FOR_LOCK 1
+/* ------------------------------------------------------------- */
 
 /*
  * Dijkstra-style semaphore.
@@ -74,9 +85,17 @@ void V(struct semaphore *);
  */
 struct lock {
         char *lk_name;
-        HANGMAN_LOCKABLE(lk_hangman);   /* Deadlock detector hook. */
         // add what you need here
         // (don't forget to mark things volatile as needed)
+#if OPT_SYNCH
+#if USE_SEMAPHORE_FOR_LOCK
+	struct semaphore *lk_sem;
+#else
+	struct wchan *lk_wchan;
+#endif
+	struct spinlock lk_spinlock;
+        volatile struct thread *lk_owner;
+#endif
 };
 
 struct lock *lock_create(const char *name);
@@ -116,6 +135,10 @@ struct cv {
         char *cv_name;
         // add what you need here
         // (don't forget to mark things volatile as needed)
+#if OPT_SYNCH
+	struct wchan *cv_wchan;
+	struct spinlock cv_spinlock;
+#endif
 };
 
 struct cv *cv_create(const char *name);

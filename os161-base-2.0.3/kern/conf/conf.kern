@@ -452,3 +452,6 @@ defoption hello
 defoption syscalls
 optfile   syscalls syscall/file_syscalls.c
 optfile   syscalls syscall/proc_syscalls.c
+
+#-- definisco synch
+defoption synch
