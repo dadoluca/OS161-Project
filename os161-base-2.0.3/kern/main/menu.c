@@ -134,13 +134,13 @@ common_prog(int nargs, char **args)
 	}
 
 	#if OPT_SHELL
-		pid_t pid = proc->p_pid;
-		kprintf("-- Waiting for process %d to wait --\n", pid);
+		
+		kprintf("-- Waiting for process --\n");
 		int exit_code = proc_wait(proc);
 		if(exit_code != 0) {
 			return exit_code;
 		} else {
-			kprintf("-- Process %d terminated --\n", pid);
+			kprintf("-- Process terminated --\n");
 		}
 	#endif
 

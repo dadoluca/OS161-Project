@@ -786,7 +786,14 @@ thread_exit(void)
 	 * Detach from our process. You might need to move this action
 	 * around, depending on how your wait/exit works.
 	 */
-	proc_remthread(cur);
+	#if OPT_SHELL
+		// per non obbligare la thread_exit a vedere sempre il thread staccato, se lo obbligassimo toglieremmo proprio la proc_remthread(cur)
+		if(cur->t_proc != NULL) {
+			proc_remthread(cur);
+		}
+	#else
+		proc_remthread(cur);
+	#endif
 
 	/* Make sure we *are* detached (move this only if you're sure!) */
 	KASSERT(cur->t_proc == NULL);

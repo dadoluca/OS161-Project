@@ -32,7 +32,7 @@
 
 
 #include <cdefs.h> /* for __DEAD */
-#include "opt-syscalls.h"
+#include "opt-shell.h"
 
 struct trapframe; /* from <machine/trapframe.h> */
 
