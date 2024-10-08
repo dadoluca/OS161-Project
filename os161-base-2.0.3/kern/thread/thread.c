@@ -140,7 +140,6 @@ thread_create(const char *name)
 	thread->t_context = NULL;
 	thread->t_cpu = NULL;
 	thread->t_proc = NULL;
-	HANGMAN_ACTORINIT(&thread->t_hangman, thread->t_name);
 
 	/* Interrupt state fields */
 	thread->t_in_interrupt = false;
@@ -239,8 +238,6 @@ cpu_create(unsigned hardware_number)
 		curthread->t_cpu = curcpu;
 		curcpu->c_curthread = curthread;
 	}
-
-	HANGMAN_ACTORINIT(&c->c_hangman, "cpu");
 
 	result = proc_addthread(kproc, c->c_curthread);
 	if (result) {
@@ -786,14 +783,15 @@ thread_exit(void)
 	 * Detach from our process. You might need to move this action
 	 * around, depending on how your wait/exit works.
 	 */
+
 	#if OPT_SHELL
-		// per non obbligare la thread_exit a vedere sempre il thread staccato, se lo obbligassimo toglieremmo proprio la proc_remthread(cur)
-		if(cur->t_proc != NULL) {
-			proc_remthread(cur);
-		}
-	#else
-		proc_remthread(cur);
-	#endif
+  	// per non obbligare la thread_exit a vedere sempre il thread staccato, se lo obbligassimo toglieremmo proprio la proc_remthread(cur)
+  	if(cur->t_proc != NULL) {
+   		proc_remthread(cur);
+  	}
+ 	#else
+  	proc_remthread(cur);
+ 	#endif
 
 	/* Make sure we *are* detached (move this only if you're sure!) */
 	KASSERT(cur->t_proc == NULL);

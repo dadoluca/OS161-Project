@@ -8,6 +8,7 @@
  */
 
 #include <spinlock.h>
+#include <limits.h>
 #include "opt-shell.h"
 
 struct addrspace;
@@ -60,6 +61,7 @@ struct proc {
         struct cv *p_cv;
         struct lock *p_lock;
 #endif
+  struct openfile *fileTable[OPEN_MAX];
 #endif
 };
 
@@ -91,5 +93,8 @@ struct addrspace *proc_setas(struct addrspace *);
 int proc_wait(struct proc *proc);
 /* get proc from pid */
 struct proc *proc_search_pid(pid_t pid);
+/* signal end/exit of process */
+void proc_signal_end(struct proc *proc);
+void proc_file_table_copy(struct proc *psrc, struct proc *pdest);
 
 #endif /* _PROC_H_ */

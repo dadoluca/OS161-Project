@@ -101,6 +101,8 @@ int sys_fork(struct trapframe *ctf, pid_t *retval) {
     return ENOMEM; 
   }
 
+  proc_file_table_copy(newp,curproc);
+
   /* we need a copy of the parent's trapframe */
   tf_child = kmalloc(sizeof(struct trapframe));
   if(tf_child == NULL){
