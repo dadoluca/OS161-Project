@@ -98,7 +98,7 @@ int sys_fork(struct trapframe *ctf, pid_t *retval) {
   as_copy(curproc->p_addrspace, &(newp->p_addrspace));
   if(newp->p_addrspace == NULL){
     proc_destroy(newp); 
-    return ENOMEM; 
+    return ENOMEM;
   }
 
   proc_file_table_copy(newp,curproc);
