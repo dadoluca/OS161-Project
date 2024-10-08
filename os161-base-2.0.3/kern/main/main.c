@@ -51,9 +51,6 @@
 #include <version.h>
 #include "autoconf.h"  // for pseudoconfig
 
-//#include "opt-hello.h"
-#include "hello.h"
-
 /*
  * These two pieces of data are maintained by the makefiles and build system.
  * buildconfig is the name of the config file the kernel was configured with.
@@ -211,10 +208,6 @@ void
 kmain(char *arguments)
 {
 	boot();
-	
-	#if OPT_HELLO
-		hello();
-	#endif
 
 	menu(arguments);
 

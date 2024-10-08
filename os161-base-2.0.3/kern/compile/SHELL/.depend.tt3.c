@@ -5,5 +5,5 @@ tt3.o: ../../test/tt3.c ../../include/types.h ../../include/kern/types.h \
  ../../include/spinlock.h ../../include/hangman.h opt-hangman.h \
  includelinks/machine/spinlock.h ../../include/threadlist.h \
  includelinks/machine/thread.h ../../include/setjmp.h \
- includelinks/kern/machine/setjmp.h ../../include/synch.h opt-synch.h \
+ includelinks/kern/machine/setjmp.h ../../include/synch.h opt-shell.h \
  ../../include/test.h

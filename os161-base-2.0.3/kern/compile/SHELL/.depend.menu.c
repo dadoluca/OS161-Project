@@ -7,10 +7,10 @@ menu.o: ../../main/menu.c ../../include/types.h \
  ../../include/kern/iovec.h ../../include/clock.h \
  ../../include/kern/time.h ../../include/mainbus.h ../../include/synch.h \
  ../../include/spinlock.h ../../include/hangman.h opt-hangman.h \
- includelinks/machine/spinlock.h opt-synch.h ../../include/thread.h \
+ includelinks/machine/spinlock.h opt-shell.h ../../include/thread.h \
  ../../include/array.h ../../include/threadlist.h \
  includelinks/machine/thread.h ../../include/setjmp.h \
- includelinks/kern/machine/setjmp.h ../../include/proc.h opt-shell.h \
+ includelinks/kern/machine/setjmp.h ../../include/proc.h \
  ../../include/vfs.h ../../include/sfs.h ../../include/fs.h \
  ../../include/vnode.h ../../include/kern/sfs.h ../../include/syscall.h \
  ../../include/test.h opt-sfs.h opt-net.h

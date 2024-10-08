@@ -453,11 +453,3 @@ file		test/semunit.c
 file		test/kmalloctest.c
 file		test/fstest.c
 optfile net	test/nettest.c
-
-# added by me
-
-
-defoption hello
-
-#-- definisco synch
-defoption synch

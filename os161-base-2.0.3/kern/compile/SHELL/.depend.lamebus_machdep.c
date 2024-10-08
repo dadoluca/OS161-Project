@@ -11,6 +11,6 @@ lamebus_machdep.o: ../../arch/sys161/dev/lamebus_machdep.c \
  includelinks/machine/thread.h ../../include/setjmp.h \
  includelinks/kern/machine/setjmp.h ../../include/current.h \
  includelinks/machine/current.h ../../include/membar.h \
- includelinks/machine/membar.h ../../include/synch.h opt-synch.h \
+ includelinks/machine/membar.h ../../include/synch.h opt-shell.h \
  ../../include/mainbus.h includelinks/sys161/bus.h \
  ../../dev/lamebus/lamebus.h ../../dev/lamebus/ltrace.h autoconf.h

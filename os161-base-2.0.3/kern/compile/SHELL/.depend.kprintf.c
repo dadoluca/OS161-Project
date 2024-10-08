@@ -8,5 +8,5 @@ kprintf.o: ../../lib/kprintf.c ../../include/types.h \
  includelinks/machine/vm.h ../../include/thread.h ../../include/array.h \
  includelinks/machine/thread.h ../../include/setjmp.h \
  includelinks/kern/machine/setjmp.h ../../include/current.h \
- includelinks/machine/current.h ../../include/synch.h opt-synch.h \
+ includelinks/machine/current.h ../../include/synch.h opt-shell.h \
  ../../include/mainbus.h ../../include/vfs.h ../../dev/lamebus/ltrace.h

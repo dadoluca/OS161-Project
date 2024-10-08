@@ -5,7 +5,7 @@ lhd.o: ../../dev/lamebus/lhd.c ../../include/types.h \
  ../../include/uio.h ../../include/kern/iovec.h ../../include/membar.h \
  includelinks/machine/membar.h ../../include/synch.h \
  ../../include/spinlock.h ../../include/hangman.h opt-hangman.h \
- includelinks/machine/spinlock.h opt-synch.h includelinks/platform/bus.h \
+ includelinks/machine/spinlock.h opt-shell.h includelinks/platform/bus.h \
  includelinks/machine/vm.h ../../dev/lamebus/lamebus.h \
  ../../include/cpu.h ../../include/threadlist.h ../../include/vfs.h \
  ../../include/array.h ../../dev/lamebus/lhd.h ../../include/device.h \
