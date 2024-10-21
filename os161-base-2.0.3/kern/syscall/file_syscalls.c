@@ -209,7 +209,6 @@ sys_open(userptr_t path, int openflags, mode_t mode, int *retval)
     if (systemFileTable[i].vn==NULL) {
       of = &systemFileTable[i];
       of->vn = v;
-      of->offset = 0; // TODO: handle offset with append
       of->countRef = 1;
       break;
     }
@@ -286,19 +285,23 @@ sys_open(userptr_t path, int openflags, mode_t mode, int *retval)
 int
 sys_close(int fd)
 {
-  struct openfile *of=NULL; 
-  struct vnode *vn;
-  if (fd<0||fd>OPEN_MAX) return -1;
-  of = curproc->fileTable[fd];
-  if (of==NULL) return -1;
+  
+  // if fd is not a valid number or is not refering to a valid entry of the fileTable, return EBADF (Bad file number)
+  if (fd < 0 || fd >= OPEN_MAX || curproc->fileTable[fd] == NULL) {
+    return EBADF;       
+  }
+
+  struct openfile *of = curproc->fileTable[fd];
+  // acquiring the lock to modify the value of count ref to the file, decreasing it by one
+  lock_acquire(of->lock);
   curproc->fileTable[fd] = NULL;
-
-  if (--of->countRef > 0) return 0; // just decrement ref cnt
-  vn = of->vn;
-  of->vn = NULL;
-  if (vn==NULL) return -1;
-
-  vfs_close(vn);  
+  of->countRef -= 1;
+  if (of->countRef <= 0) {
+    struct vnode *vn = of->vn;
+    of->vn = NULL;
+    vfs_close(vn);
+  }
+  lock_release(of->lock);
   return 0;
 }
 

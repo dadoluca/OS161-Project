@@ -119,9 +119,8 @@ syscall(struct trapframe *tf)
             &retval);
         break;
       case SYS_close:
-          retval = sys_close((int)tf->tf_a0);
-          if (retval<0) err = ENOENT; 
-        break;
+          err = sys_close((int)tf->tf_a0);
+          break;
       case SYS_remove:
         /* just ignore: do nothing */
           retval = 0;
