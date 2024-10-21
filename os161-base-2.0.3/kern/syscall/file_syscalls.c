@@ -8,9 +8,11 @@
 #include <kern/errno.h>
 #include <clock.h>
 #include <syscall.h>
+#include <synch.h>
 #include <current.h>
 #include <lib.h>
-
+#include <kern/fcntl.h>
+#include <kern/stat.h>
 #include <copyinout.h>
 #include <vnode.h>
 #include <vfs.h>
@@ -26,8 +28,10 @@
 /* system open file table */
 struct openfile {
   struct vnode *vn;
-  off_t offset;  
+  off_t offset;
+  int mode;
   unsigned int countRef;
+  struct lock *lock;
 };
 
 struct openfile systemFileTable[SYSTEM_OPEN_MAX];
@@ -171,18 +175,35 @@ file_write(int fd, userptr_t buf_ptr, size_t size) {
  * file system calls for open/close
  */
 int
-sys_open(userptr_t path, int openflags, mode_t mode, int *errp)
+sys_open(userptr_t path, int openflags, mode_t mode, int *retval)
 {
   int fd, i;
   struct vnode *v;
-  struct openfile *of=NULL;;   
-  int result;
+  struct openfile *of=NULL;
 
-  result = vfs_open((char *)path, openflags, mode, &v);
-  if (result) {
-    *errp = ENOENT;
-    return -1;
+  if (path == NULL) {
+    return EFAULT;
   }
+
+  /* Copying pathname to kernel side */
+  char *kbuffer = (char *) kmalloc(PATH_MAX * sizeof(char));
+    if (kbuffer == NULL) {
+        return ENOMEM;
+    }
+    size_t len;
+    int err = copyinstr((const_userptr_t) path, kbuffer, PATH_MAX, &len); // may return EFAULT
+    if (err) {
+        kfree(kbuffer);
+        return EFAULT;
+    }
+
+  err = vfs_open((char *)path, openflags, mode, &v);
+  if (err) {
+    kfree(kbuffer);
+    return err;
+  }
+  kfree(kbuffer);
+
   /* search system open file table */
   for (i=0; i<SYSTEM_OPEN_MAX; i++) {
     if (systemFileTable[i].vn==NULL) {
@@ -193,23 +214,70 @@ sys_open(userptr_t path, int openflags, mode_t mode, int *errp)
       break;
     }
   }
+
   if (of==NULL) { 
     // no free slot in system open file table
-    *errp = ENFILE;
+    return ENFILE;
   }
-  else {
-    for (fd=STDERR_FILENO+1; fd<OPEN_MAX; fd++) {
+  else { // assigning openfile to current process filetable
+    for (fd=STDERR_FILENO+1; fd<OPEN_MAX; fd++) {// skipping STDIN, STDOUT and STDERR
       if (curproc->fileTable[fd] == NULL) {
-  curproc->fileTable[fd] = of;
-  return fd;
+        curproc->fileTable[fd] = of;
+        return fd;
       }
     }
     // no free slot in process open file table
-    *errp = EMFILE;
+    return EMFILE;
+  }
+
+  // managing the way to read the file
+  if (openflags & O_APPEND) {
+    // retrieve file size
+    struct stat filest;
+    err = VOP_STAT(curproc->fileTable[fd]->vn, &filest);
+    if (err) {
+      kfree(curproc->fileTable[fd]);
+      curproc->fileTable[fd] = NULL;
+      return err;
+    }
+    // putting the offset at the end of the file (starting at the end)
+    curproc->fileTable[fd]->offset = filest.st_size;
+  } else {
+    // starting at the beginning, putting the offset of the file table at 0
+    curproc->fileTable[fd]->offset = 0;
+  }
+
+  // different modes
+  switch(openflags & O_ACCMODE){
+    case O_RDONLY: // read only mode
+      curproc->fileTable[fd]->mode = O_RDONLY;
+      break;
+    case O_WRONLY: // write only mode
+			curproc->fileTable[fd]->mode = O_WRONLY;
+			break;
+		case O_RDWR: // read and write mode
+			curproc->fileTable[fd]->mode = O_RDWR;
+			break;
+		default: // none of the specified mode
+			vfs_close(curproc->fileTable[fd]->vn);
+			kfree(curproc->fileTable[fd]);
+			curproc->fileTable[fd] = NULL;
+			return EINVAL;
+  }
+
+  // creating the lock on the file
+  curproc->fileTable[fd]->lock = lock_create("FILE_LOCK");
+  // if the lock is equal to NULL means that something went wrong during the creation process
+  if (curproc->fileTable[fd]->lock == NULL) {
+    vfs_close(curproc->fileTable[fd]->vn);
+    kfree(curproc->fileTable[fd]);
+    curproc->fileTable[fd] = NULL;
+    return ENOMEM;
   }
   
-  vfs_close(v);
-  return -1;
+  // task completed, returning 0 and the fd
+  *retval = fd;
+  return 0;
 }
 
 /*

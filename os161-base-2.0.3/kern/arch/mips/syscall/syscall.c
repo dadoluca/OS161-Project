@@ -112,11 +112,11 @@ syscall(struct trapframe *tf)
       /* Add stuff here */
     #if OPT_SHELL
       case SYS_open:
-          retval = sys_open(
+          err = sys_open(
             (userptr_t)tf->tf_a0,
             (int)tf->tf_a1,
             (mode_t)tf->tf_a2,
-            &err);
+            &retval);
         break;
       case SYS_close:
           retval = sys_close((int)tf->tf_a0);
@@ -217,8 +217,7 @@ enter_forked_process(struct trapframe *tf)
   struct trapframe forkedTf = *tf; // copy trap frame onto kernel stack
 
   forkedTf.tf_v0 = 0; // return value is 0
-        forkedTf.tf_a3 = 0; // return with success
-
+  forkedTf.tf_a3 = 0; // return with success
   forkedTf.tf_epc += 4; // return to next instruction
   
   as_activate();
