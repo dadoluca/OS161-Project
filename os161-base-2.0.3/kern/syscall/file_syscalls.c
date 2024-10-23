@@ -100,39 +100,68 @@ file_write(int fd, userptr_t buf_ptr, size_t size) {
 }
 
 #else
-
 static int
-file_read(int fd, userptr_t buf_ptr, size_t size) {
+file_read(int fd, const void* buf_ptr, size_t size, int *retval) {
   struct iovec iov;
   struct uio u;
   int result;
   struct vnode *vn;
   struct openfile *of;
 
-  if (fd<0||fd>OPEN_MAX) return -1;
+  if(buf_ptr == NULL){
+    return EFAULT;
+  }
+
+  if(fd<0 || fd>=OPEN_MAX){
+    return EBADF;
+  } else if (curproc->fileTable[fd] == NULL){
+    return EBADF;
+  } else if(curproc->fileTable[fd]->mode == O_WRONLY) {
+    return EBADF;
+  }
+
+  char *kbuffer = (char *) kmalloc((size+1)*sizeof(char));
+  if(kbuffer == NULL) {
+    return ENOMEM;
+  }
+
   of = curproc->fileTable[fd];
-  if (of==NULL) return -1;
+  //if (of==NULL) return -1;
   vn = of->vn;
-  if (vn==NULL) return -1;
+  //if (vn==NULL) return -1;
 
-  iov.iov_ubase = buf_ptr;
+  lock_acquire(of->lock);
+
+  iov.iov_kbase = kbuffer;
   iov.iov_len = size;
-
   u.uio_iov = &iov;
   u.uio_iovcnt = 1;
   u.uio_resid = size;          // amount to read from the file
   u.uio_offset = of->offset;
-  u.uio_segflg =UIO_USERISPACE;
+  u.uio_segflg = UIO_SYSSPACE;
   u.uio_rw = UIO_READ;
-  u.uio_space = curproc->p_addrspace;
+  u.uio_space = NULL;
 
   result = VOP_READ(vn, &u);
   if (result) {
+    kfree(kbuffer);
+    lock_release(of->lock);
     return result;
   }
 
   of->offset = u.uio_offset;
-  return (size - u.uio_resid);
+  *retval = size - u.uio_resid;
+
+  result = copyout(kbuffer, (userptr_t)buf_ptr, *retval);
+  if(result) {
+    kfree(kbuffer);
+    lock_release(of->lock);
+    return EFAULT;
+  }
+
+  lock_release(of->lock);
+  kfree(kbuffer);
+  return 0;
 }
 
 static int
@@ -326,13 +355,13 @@ sys_write(int fd, userptr_t buf_ptr, size_t size)
 }
 
 int
-sys_read(int fd, userptr_t buf_ptr, size_t size)
+sys_read(int fd, const void* buf_ptr, size_t size, int *retval)
 {
   int i;
   char *p = (char *)buf_ptr;
 
   if (fd!=STDIN_FILENO) {
-    return file_read(fd, buf_ptr, size);
+    return file_read(fd, buf_ptr, size, retval);
   }
 
   for (i=0; i<(int)size; i++) {
@@ -341,5 +370,6 @@ sys_read(int fd, userptr_t buf_ptr, size_t size)
       return i;
   }
 
-  return (int)size;
+  *retval = (int)size;
+  return 0;
 }
