@@ -19,6 +19,7 @@
 #include <limits.h>
 #include <uio.h>
 #include <proc.h>
+#include <kern/seek.h>
 
 /* max num of system wide open files */
 #define SYSTEM_OPEN_MAX (10*OPEN_MAX)
@@ -371,5 +372,68 @@ sys_read(int fd, const void* buf_ptr, size_t size, int *retval)
   }
 
   *retval = (int)size;
+  return 0;
+}
+
+int sys_lseek(int fd, off_t pos, int whence, int32_t* retval, int32_t* retval_upp) {
+
+  if (fd < 0 || fd >= OPEN_MAX) {
+    return EBADF;
+  } else if (curproc->fileTable[fd] == NULL) {
+    return EBADF;
+  }
+
+  // checking if the object is a seekable one
+  if(!VOP_ISSEEKABLE(curproc->fileTable[fd]->vn)) {
+    return ESPIPE;
+  }
+
+  // switching about whence, setting the return value
+  struct openfile *of = curproc->fileTable[fd];
+  struct stat info;
+  int err;
+  lock_acquire(of->lock);
+  off_t value = of->offset;
+  switch (whence) {
+    // setting position as pos
+    case SEEK_SET:
+      if (pos < 0) {
+        lock_release(of->lock);
+        return EINVAL;
+      }
+      value = pos;
+      break;
+    // setting position as position + pos
+    case SEEK_CUR:
+      if (pos < 0 && -pos > of->offset) {
+        lock_release(of->lock);
+        return EINVAL;
+      }
+      value = of->offset + pos;
+      break;
+    // setting position as end-of-file + pos
+    case SEEK_END:
+      err = VOP_STAT(of->vn, &info);
+      if (err) {
+        lock_release(of->lock);
+        return err;
+      }
+      if (pos < 0 && -pos > info.st_size) { // checking if -pos higher then file size
+        lock_release(of->lock);
+        return EINVAL;
+      }
+      value = info.st_size + pos;
+      break;
+    default:
+      lock_release(of->lock);
+      return EINVAL;
+  }
+
+  // updating the offset
+  of->offset = value;
+  lock_release(of->lock);
+
+  *retval = (int32_t) (value >> 32); // to take the most significant bit
+  *retval_upp = (int32_t) (value & 0x00000000ffffffff); // to take the least significant bit
   return 0;
 }

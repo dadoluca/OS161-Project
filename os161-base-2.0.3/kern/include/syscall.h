@@ -72,6 +72,7 @@ void sys__exit(int status);
 int sys_waitpid(pid_t pid, userptr_t statusp, int options);
 pid_t sys_getpid(void);
 int sys_fork(struct trapframe *ctf, pid_t *retval);
+int sys_lseek(int fd, off_t pos, int whence, int32_t *retval, int32_t *retval_upp);
 #endif
 
 #endif /* _SHELL_ */

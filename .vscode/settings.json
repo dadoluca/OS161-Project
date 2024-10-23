@@ -6,6 +6,7 @@
         "version.h": "c",
         "syscall.h": "c",
         "trapframe.h": "c",
-        "thread.h": "c"
+        "thread.h": "c",
+        "unistd.h": "c"
     }
 }
