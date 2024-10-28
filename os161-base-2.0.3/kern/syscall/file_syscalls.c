@@ -23,7 +23,7 @@
 /* max num of system wide open files */
 #define SYSTEM_OPEN_MAX (10*OPEN_MAX)
 
-#define USE_KERNEL_BUFFER 0
+//#define USE_KERNEL_BUFFER 0
 
 /* system open file table */
 struct openfile {
@@ -70,7 +70,7 @@ file_read(int fd, userptr_t buf_ptr, size_t size) {
   kfree(kbuf);
   return (nread);
 }
-
+/*
 static int
 file_write(int fd, userptr_t buf_ptr, size_t size) {
   struct iovec iov;
@@ -97,7 +97,7 @@ file_write(int fd, userptr_t buf_ptr, size_t size) {
   of->offset = ku.uio_offset;
   nwrite = size - ku.uio_resid;
   return (nwrite);
-}
+}*/
 
 #else
 
@@ -135,6 +135,7 @@ file_read(int fd, userptr_t buf_ptr, size_t size) {
   return (size - u.uio_resid);
 }
 
+/*
 static int
 file_write(int fd, userptr_t buf_ptr, size_t size) {
   struct iovec iov;
@@ -167,7 +168,7 @@ file_write(int fd, userptr_t buf_ptr, size_t size) {
   of->offset = u.uio_offset;
   nwrite = size - u.uio_resid;
   return (nwrite);
-}
+}*/
 
 #endif
 
@@ -308,6 +309,57 @@ sys_close(int fd)
 /*
  * simple file system calls for write/read
  */
+int
+file_write(int fd, const void *buf_ptr, size_t size, int *retval)
+{
+  /*if fd is not a valid number or is not refering to a valid entry of the fileTable, return EBADF (Bad file number)
+  if (fd < 0 || fd >= OPEN_MAX || curproc->fileTable[fd] == NULL || curproc->fileTable[fd]->mode == O_RDONLY) {
+    return EBADF;       
+  }*/
+
+  /* CHECKING FILE DESCRIPTOR */
+  if (fd < 0 || fd >= OPEN_MAX) {                                 /* fd should be a valid number                          */
+      return EBADF;       
+  } else if (curproc->fileTable[fd] == NULL) {                    /* fd should refer to a valid entry in the fileTable    */
+      return EBADF;
+  } else if (curproc->fileTable[fd]->mode == O_RDONLY) {     /* fd should refer to a file allowed to be written      */
+      return EBADF;
+  }
+
+  char *kbuffer = (char *) kmalloc(size * sizeof(char));
+  if(kbuffer == NULL){
+    return ENOMEM;
+  }
+  else if (copyin((const_userptr_t) buf_ptr, kbuffer, size)){
+    kfree(kbuffer);
+    return EFAULT;
+  }
+
+  struct iovec iov;
+  struct uio kuio;
+  struct openfile *of =  curproc->fileTable[fd];
+  struct vnode *vn = of->vn;
+  
+  lock_acquire(of->lock);
+  uio_kinit(&iov,&kuio,kbuffer,size, of->offset, UIO_WRITE);
+  int err = VOP_WRITE(vn, &kuio);
+
+  if(err){
+    kfree(kbuffer);
+    return err;
+  }
+
+  //repositioning of the new offset
+  off_t  n_bytes = kuio.uio_offset - of->offset;
+  *retval = (int) n_bytes;
+  of->offset = kuio.uio_offset;
+
+  lock_release(of->lock);
+  kfree(kbuffer);
+  return 0;
+
+}
+
 int
 sys_write(int fd, userptr_t buf_ptr, size_t size)
 {
