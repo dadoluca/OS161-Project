@@ -23,6 +23,10 @@
 /* max num of system wide open files */
 #define SYSTEM_OPEN_MAX (10*OPEN_MAX)
 
+
+int file_write(int fd, const void *buf_ptr, size_t size, int *retval);
+
+
 //#define USE_KERNEL_BUFFER 0
 
 /* system open file table */
@@ -295,62 +299,71 @@ sys_close(int fd)
   struct openfile *of = curproc->fileTable[fd];
   // acquiring the lock to modify the value of count ref to the file, decreasing it by one
   lock_acquire(of->lock);
+
   curproc->fileTable[fd] = NULL;
-  of->countRef -= 1;
+  of->countRef--; 
+
   if (of->countRef <= 0) {
     struct vnode *vn = of->vn;
     of->vn = NULL;
     vfs_close(vn);
+    lock_release(of->lock);
+    lock_destroy(of->lock);
+    kfree(of);
   }
-  lock_release(of->lock);
+  else{ lock_release(of->lock);}
   return 0;
 }
 
-/*
- * simple file system calls for write/read
- */
+
 int
 file_write(int fd, const void *buf_ptr, size_t size, int *retval)
 {
-  /*if fd is not a valid number or is not refering to a valid entry of the fileTable, return EBADF (Bad file number)
-  if (fd < 0 || fd >= OPEN_MAX || curproc->fileTable[fd] == NULL || curproc->fileTable[fd]->mode == O_RDONLY) {
-    return EBADF;       
-  }*/
 
-  /* CHECKING FILE DESCRIPTOR */
-  if (fd < 0 || fd >= OPEN_MAX) {                                 /* fd should be a valid number                          */
-      return EBADF;       
-  } else if (curproc->fileTable[fd] == NULL) {                    /* fd should refer to a valid entry in the fileTable    */
-      return EBADF;
-  } else if (curproc->fileTable[fd]->mode == O_RDONLY) {     /* fd should refer to a file allowed to be written      */
-      return EBADF;
+  /* Check for null buffer pointer */
+  if(buf_ptr == NULL){
+      return EFAULT; 
   }
 
   char *kbuffer = (char *) kmalloc(size * sizeof(char));
   if(kbuffer == NULL){
-    return ENOMEM;
+      kfree(kbuffer); 
+      return ENOMEM;
   }
-  else if (copyin((const_userptr_t) buf_ptr, kbuffer, size)){
-    kfree(kbuffer);
-    return EFAULT;
+
+  /* Safely copy data from user buffer to kernel buffer */
+  int invalidBuf_err = copyin((const_userptr_t)buf_ptr, kbuffer, size);
+  if (invalidBuf_err) {
+      kfree(kbuffer);
+      return EFAULT; 
+  }
+
+  /* Validate the file descriptor */
+  if (fd < 0 || fd >= OPEN_MAX) {       /* Invalid file descriptor number */
+      return EBADF;       
+  } else if (curproc->fileTable[fd] == NULL) { /* File descriptor not associated with an open file */
+      return EBADF;
+  } else if (curproc->fileTable[fd]->mode == O_RDONLY) { /* File descriptor refers to a read-only file */
+      return EBADF;
   }
 
   struct iovec iov;
   struct uio kuio;
-  struct openfile *of =  curproc->fileTable[fd];
+  struct openfile *of = curproc->fileTable[fd];
   struct vnode *vn = of->vn;
-  
+
   lock_acquire(of->lock);
-  uio_kinit(&iov,&kuio,kbuffer,size, of->offset, UIO_WRITE);
+  uio_kinit(&iov, &kuio, kbuffer, size, of->offset, UIO_WRITE);
   int err = VOP_WRITE(vn, &kuio);
 
   if(err){
-    kfree(kbuffer);
-    return err;
+      lock_release(of->lock);
+      kfree(kbuffer);
+      return err;
   }
 
-  //repositioning of the new offset
-  off_t  n_bytes = kuio.uio_offset - of->offset;
+  /* Update the file offset after successful write */
+  off_t n_bytes = kuio.uio_offset - of->offset;
   *retval = (int) n_bytes;
   of->offset = kuio.uio_offset;
 
@@ -361,20 +374,22 @@ file_write(int fd, const void *buf_ptr, size_t size, int *retval)
 }
 
 int
-sys_write(int fd, userptr_t buf_ptr, size_t size)
+sys_write(int fd, const void* buf_ptr, size_t size, int *retval)
 {
   int i;
   char *p = (char *)buf_ptr;
 
   if (fd!=STDOUT_FILENO && fd!=STDERR_FILENO) {
-    return file_write(fd, buf_ptr, size);
+    return file_write(fd, buf_ptr, size, retval);
   }
 
   for (i=0; i<(int)size; i++) {
     putch(p[i]);
   }
 
-  return (int)size;
+
+  *retval = (int)size;
+  return 0;
 }
 
 int
