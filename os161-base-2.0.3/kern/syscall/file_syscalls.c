@@ -319,6 +319,8 @@ sys_close(int fd)
 int
 file_write(int fd, const void *buf_ptr, size_t size, int *retval)
 {
+  /* We first check if buf_ptr is valid.
+  buf_ptr is a pointer to a memory buffer, which contains the data we want to write to the file */
 
   /* Check for null buffer pointer */
   if(buf_ptr == NULL){
@@ -333,11 +335,12 @@ file_write(int fd, const void *buf_ptr, size_t size, int *retval)
 
   /* Safely copy data from user buffer to kernel buffer */
   int invalidBuf_err = copyin((const_userptr_t)buf_ptr, kbuffer, size);
-  if (invalidBuf_err) {
+  if (invalidBuf_err) { /*if it is invalid or kernel*/
       kfree(kbuffer);
       return EFAULT; 
   }
 
+  /*fd is the “file descriptor” that uniquely identifies in the fileTabel the file in which you want to write*/
   /* Validate the file descriptor */
   if (fd < 0 || fd >= OPEN_MAX) {       /* Invalid file descriptor number */
       return EBADF;       
@@ -386,7 +389,6 @@ sys_write(int fd, const void* buf_ptr, size_t size, int *retval)
   for (i=0; i<(int)size; i++) {
     putch(p[i]);
   }
-
 
   *retval = (int)size;
   return 0;
