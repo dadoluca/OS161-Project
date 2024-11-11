@@ -143,7 +143,7 @@ syscall(struct trapframe *tf)
             &err);
         break;
       case SYS_chdir:
-        err = sys_chdir((char *)tf->tf_a0);
+        err = 0;
         break;
       case SYS_lseek:
         pos = tf->tf_a2;
@@ -155,35 +155,10 @@ syscall(struct trapframe *tf)
           *(int32_t *)(tf->tf_sp+16),
           &retval_64);
         break;
-      case SYS_dup2:
-        err = sys_dup2(
-          (int) tf->tf_a0,
-          (int) tf->tf_a1,
-          &retval);
-        break;
-      case SYS___getcwd:
-        err = sys_getcwd(
-          (char *) tf->tf_a0,
-          (size_t) tf->tf_a1,
-          &retval);
-          break;
       case SYS__exit:
           /* TODO: just avoid crash */
            sys__exit((int)tf->tf_a0);
         break;
-      case SYS_waitpid:
-          retval = sys_waitpid(
-            (pid_t)tf->tf_a0,
-            (userptr_t)tf->tf_a1,
-            (int)tf->tf_a2,
-            &err);
-        break;
-      case SYS_getpid:
-          retval = sys_getpid();
-          if (retval<0) err = ENOSYS; 
-          else err = 0;
-        break;
-
       case SYS_fork:
           err = sys_fork(tf,&retval);
         break;
