@@ -412,7 +412,7 @@ proc.o: ../../proc/proc.c ../../include/types.h \
  ../../include/setjmp.h includelinks/kern/machine/setjmp.h \
  ../../include/addrspace.h ../../include/vm.h includelinks/machine/vm.h \
  opt-dumbvm.h ../../include/vnode.h ../../include/syscall.h \
- ../../include/synch.h
+ ../../include/synch.h ../../include/kern/fcntl.h ../../include/vfs.h
 file_syscalls.o: ../../syscall/file_syscalls.c ../../include/types.h \
  ../../include/kern/types.h includelinks/kern/machine/types.h \
  includelinks/machine/types.h ../../include/kern/unistd.h \
@@ -427,7 +427,10 @@ file_syscalls.o: ../../syscall/file_syscalls.c ../../include/types.h \
  ../../include/kern/fcntl.h ../../include/kern/stat.h \
  ../../include/copyinout.h ../../include/vnode.h ../../include/vfs.h \
  ../../include/limits.h ../../include/kern/limits.h ../../include/uio.h \
- ../../include/kern/iovec.h ../../include/proc.h
+ ../../include/kern/iovec.h ../../include/proc.h \
+ ../../include/kern/seek.h ../../include/stat.h \
+ ../../include/kern/stattypes.h ../../include/endian.h \
+ ../../include/kern/endian.h includelinks/kern/machine/endian.h
 loadelf.o: ../../syscall/loadelf.c ../../include/types.h \
  ../../include/kern/types.h includelinks/kern/machine/types.h \
  includelinks/machine/types.h ../../include/kern/errno.h \
@@ -456,7 +459,8 @@ proc_syscalls.o: ../../syscall/proc_syscalls.c ../../include/types.h \
  ../../include/setjmp.h includelinks/kern/machine/setjmp.h \
  ../../include/addrspace.h ../../include/vm.h includelinks/machine/vm.h \
  opt-dumbvm.h includelinks/mips/trapframe.h ../../include/current.h \
- includelinks/machine/current.h ../../include/synch.h
+ includelinks/machine/current.h ../../include/synch.h \
+ ../../include/kern/wait.h
 runprogram.o: ../../syscall/runprogram.c ../../include/types.h \
  ../../include/kern/types.h includelinks/kern/machine/types.h \
  includelinks/machine/types.h ../../include/kern/errno.h \

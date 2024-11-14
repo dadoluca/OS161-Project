@@ -34,10 +34,30 @@ struct vnode;
  */
 
 #if OPT_SHELL
-/* G.Cabodi - 2019 - implement waitpid: 
-   synch with semaphore (1) or cond.var.(0) */
 #define USE_SEMAPHORE_FOR_WAITPID 1
 #endif
+
+#if OPT_SHELL
+/* system open file table */
+struct openfile {
+  struct vnode *vn;
+  off_t offset;
+  int mode;
+  unsigned int countRef;
+  struct lock *lock;
+};
+#endif
+
+#if OPT_SHELL
+struct thread_node{ //It's used in order to know the threads belonging to a process, so that we can terminate them all in case a bad instruction is hit 
+	struct thread *t;
+	struct thread_node *next;
+};
+struct child_node{ //To keep track of childs of the process
+	struct proc *p;
+	struct child_node *next;
+};
+#endif 
 
 struct proc {
   char *p_name;      /* Name of this process */
@@ -52,9 +72,12 @@ struct proc {
 
   /* add more material here as needed */
 #if OPT_SHELL
-        /* G.Cabodi - 2019 - implement waitpid: synchro, and exit status */
+        struct thread_node *p_thread_list; //head of the list of threads 
+		    struct child_node *p_children_list; //head of the list of children for a process, kept to terminate them on exit
+		    struct proc *p_father_proc; //pointer to the proc structure of the father (if any)
         int p_status;                   /* status as obtained by exit() */
         pid_t p_pid;                    /* process pid */
+        int p_terminated; //added to verify if a process terminated
 #if USE_SEMAPHORE_FOR_WAITPID
   struct semaphore *p_sem;
 #else
@@ -96,5 +119,8 @@ struct proc *proc_search_pid(pid_t pid);
 /* signal end/exit of process */
 void proc_signal_end(struct proc *proc);
 void proc_file_table_copy(struct proc *psrc, struct proc *pdest);
+int check_is_child(pid_t pid);
+int proc_verify_pid(void);
+struct proc * check_is_terminated(struct proc *p);
 
 #endif /* _PROC_H_ */

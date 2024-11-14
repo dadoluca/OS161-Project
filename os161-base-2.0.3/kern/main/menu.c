@@ -133,16 +133,8 @@ common_prog(int nargs, char **args)
 		return result;
 	}
 
-	#if OPT_SHELL
-		
-		kprintf("-- Waiting for process --\n");
-		int exit_code = proc_wait(proc);
-		if(exit_code != 0) {
-			return exit_code;
-		} else {
-			kprintf("-- Process terminated --\n");
-		}
-	#endif
+	int exit_code = proc_wait(proc);
+	kprintf("Process terminated with exit code: %d\n", exit_code);
 
 	/*
 	 * The new process will be destroyed when the program exits...

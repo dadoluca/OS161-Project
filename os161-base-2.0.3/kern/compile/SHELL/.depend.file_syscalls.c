@@ -12,4 +12,7 @@ file_syscalls.o: ../../syscall/file_syscalls.c ../../include/types.h \
  ../../include/kern/fcntl.h ../../include/kern/stat.h \
  ../../include/copyinout.h ../../include/vnode.h ../../include/vfs.h \
  ../../include/limits.h ../../include/kern/limits.h ../../include/uio.h \
- ../../include/kern/iovec.h ../../include/proc.h
+ ../../include/kern/iovec.h ../../include/proc.h \
+ ../../include/kern/seek.h ../../include/stat.h \
+ ../../include/kern/stattypes.h ../../include/endian.h \
+ ../../include/kern/endian.h includelinks/kern/machine/endian.h

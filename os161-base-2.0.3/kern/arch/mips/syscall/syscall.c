@@ -80,6 +80,7 @@ syscall(struct trapframe *tf)
 {
   int callno;
   int32_t retval;
+  int64_t retval_64;
   int err=0;
 
   KASSERT(curthread != NULL);
@@ -98,6 +99,7 @@ syscall(struct trapframe *tf)
    */
 
   retval = 0;
+  retval_64 = 0;
 
   switch (callno) {
       case SYS_reboot:
@@ -110,13 +112,13 @@ syscall(struct trapframe *tf)
     break;
 
       /* Add stuff here */
-    #if OPT_SHELL
+#if OPT_SHELL
       case SYS_open:
-          err = sys_open(
+          retval = sys_open(
             (userptr_t)tf->tf_a0,
             (int)tf->tf_a1,
             (mode_t)tf->tf_a2,
-            &retval);
+            &err);
         break;
       case SYS_close:
           err = sys_close((int)tf->tf_a0);
@@ -129,40 +131,30 @@ syscall(struct trapframe *tf)
           retval = sys_write(
             (int)tf->tf_a0,
             (userptr_t)tf->tf_a1,
-            (size_t)tf->tf_a2);
-          /* error: function not implemented */
-          if (retval<0) err = ENOSYS; 
-          else err = 0;
+            (size_t)tf->tf_a2,
+            &err);
         break;
       case SYS_read:
-          err = sys_read(
+          retval = sys_read(
             (int)tf->tf_a0,
             (userptr_t)tf->tf_a1,
             (size_t)tf->tf_a2,
-            &retval);
+            &err);
+        break;
+      case SYS_chdir:
+        err = 0;
+        break;
+      case SYS_lseek:
+       err = 0;
         break;
       case SYS__exit:
           /* TODO: just avoid crash */
            sys__exit((int)tf->tf_a0);
         break;
-      case SYS_waitpid:
-          retval = sys_waitpid(
-            (pid_t)tf->tf_a0,
-            (userptr_t)tf->tf_a1,
-            (int)tf->tf_a2);
-          if (retval<0) err = ENOSYS; 
-          else err = 0;
-        break;
-      case SYS_getpid:
-          retval = sys_getpid();
-          if (retval<0) err = ENOSYS; 
-          else err = 0;
-        break;
-
       case SYS_fork:
           err = sys_fork(tf,&retval);
         break;
-    #endif
+#endif
 
     default:
       kprintf("Unknown syscall %d\n", callno);
@@ -183,6 +175,7 @@ syscall(struct trapframe *tf)
   else {
     /* Success. */
     tf->tf_v0 = retval;
+    tf->tf_v1 = retval_64;
     tf->tf_a3 = 0;      /* signal no error */
   }
 
