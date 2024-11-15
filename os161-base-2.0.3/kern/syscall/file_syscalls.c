@@ -287,9 +287,10 @@ sys_close(int fd)
   // acquiring the lock to modify the value of count ref to the file, decreasing it by one
   lock_acquire(of->lock);
   of->countRef--;
-
   curproc->fileTable[fd] = NULL;
+
   if (of->countRef == 0) {
+    of->vn = NULL;
     vfs_close(of->vn);
     lock_release(of->lock);
     lock_destroy(of->lock);
@@ -298,3 +299,58 @@ sys_close(int fd)
   }
   return 0;
 }
+
+
+#if OPT_SHELL
+int sys_dup2(int old_fd, int new_fd, int *retval) {
+
+    struct openfile *of;
+
+    /* cech if the curproc is valid*/
+    KASSERT(curproc != NULL);
+
+    /* validate input arguments */
+    if (old_fd < 0 || old_fd >= OPEN_MAX || new_fd < 0 || new_fd >= OPEN_MAX) {
+      /*fd must be in the valid range [0, OPEN_MAX]*/
+        return EBADF;   // invalid file handler
+    } else if (curproc->fileTable[old_fd] == NULL) {
+      /*the old fd must refer to an open file*/
+        return EBADF;   // invalid file handler
+    } else if (old_fd == new_fd) {
+        /* The two handles refer to the same "open" of the file - that is, they are references to the same object and share the same seek pointer. */
+        *retval = old_fd; //return value
+        //kprintf("\nretval = %d\n",*retval);
+        return 0;   //no error 
+    } 
+
+    /* Ccheck if new_fd refers to an open file */
+    if (curproc->fileTable[new_fd] != NULL) {
+        
+        /* Close the file currently associated with new_fd */
+        of = curproc->fileTable[new_fd];
+        lock_acquire(of->lock);
+        curproc->fileTable[new_fd] = NULL;
+        if (--of->countRef == 0) {
+
+            /* If no processes are referencing this file, clean up resources */
+            struct vnode *vn = of->vn;
+            of->vn = NULL;
+            vfs_close(vn);
+        }
+        lock_release(of->lock);
+        of = NULL;
+    }
+
+    /* increment of the count references */
+    of = curproc->fileTable[old_fd];
+    lock_acquire(of->lock);
+    of->countRef++;
+    lock_release(of->lock);
+
+    /* assignment  new_fd*/
+    curproc->fileTable[new_fd] = of;     /
+
+    *retval = new_fd;
+    return 0;
+}
+#endif
