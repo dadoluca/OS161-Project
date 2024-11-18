@@ -348,9 +348,78 @@ int sys_dup2(int old_fd, int new_fd, int *retval) {
     lock_release(of->lock);
 
     /* assignment  new_fd*/
-    curproc->fileTable[new_fd] = of;     /
+    curproc->fileTable[new_fd] = of;
 
     *retval = new_fd;
     return 0;
+}
+#endif
+
+#if OPT_SHELL
+int sys_lseek(int fd, off_t pos, int whence, int64_t* retval) {
+
+  KASSERT(curproc != NULL);
+
+  if(fd < 0 || fd >= OPEN_MAX || curproc->fileTable[fd] == NULL) {
+    return EBADF;
+  }
+
+  struct openfile *of = curproc->fileTable[fd];
+  if(of == NULL) {
+    return EBADF;
+  }
+
+  // checking if the object is a seekable one
+  if(!VOP_ISSEEKABLE(of->vn)) {
+    return ESPIPE;
+  }
+
+  struct stat info;
+  int err;
+  int new_off;
+
+  lock_acquire(of->lock);
+
+  switch (whence) {
+    // setting position as pos
+    case SEEK_SET:
+      if (pos < 0) {
+        lock_release(of->lock);
+        return EINVAL;
+      }
+      new_off = pos;
+      break;
+    // setting position as position + pos
+    case SEEK_CUR:
+      if (pos < 0 && -pos > of->offset) {
+        lock_release(of->lock);
+        return EINVAL;
+      }
+      new_off = of->offset + pos;
+      break;
+    // setting position as end-of-file + pos
+    case SEEK_END:
+      err = VOP_STAT(of->vn, &info);
+      if (err) {
+        lock_release(of->lock);
+        return err;
+      }
+      if (pos < 0 && -pos > info.st_size) { // checking if -pos higher then file size
+        lock_release(of->lock);
+        return EINVAL;
+      }
+      new_off = info.st_size + pos;
+      break;
+    default:
+      lock_release(of->lock);
+      return EINVAL;
+  }
+
+  // updating the offset
+  of->offset = new_off;
+  lock_release(of->lock);
+
+  *retval = new_off;
+  return 0;
 }
 #endif
