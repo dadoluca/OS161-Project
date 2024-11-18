@@ -290,7 +290,6 @@ sys_close(int fd)
   curproc->fileTable[fd] = NULL;
 
   if (of->countRef == 0) {
-    of->vn = NULL;
     vfs_close(of->vn);
     lock_release(of->lock);
     lock_destroy(of->lock);
@@ -348,7 +347,7 @@ int sys_dup2(int old_fd, int new_fd, int *retval) {
     lock_release(of->lock);
 
     /* assignment  new_fd*/
-    curproc->fileTable[new_fd] = of;     /
+    curproc->fileTable[new_fd] = of;
 
     *retval = new_fd;
     return 0;
