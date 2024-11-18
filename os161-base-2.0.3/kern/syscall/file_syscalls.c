@@ -306,7 +306,7 @@ int sys_dup2(int old_fd, int new_fd, int *retval) {
 
     struct openfile *of;
 
-    /* cech if the curproc is valid*/
+    /* check if the curproc is valid*/
     KASSERT(curproc != NULL);
 
     /* validate input arguments */
@@ -355,7 +355,7 @@ int sys_dup2(int old_fd, int new_fd, int *retval) {
 }
 #endif
 
-
+#if OPT_SHELL
 int sys_chdir(const char *pathname) {
 
   // create a buffer
@@ -390,5 +390,6 @@ int sys_chdir(const char *pathname) {
 
   // Close the vn because no longer needed. Dir already set
   vfs_close(vn);
-  return 0;
+  return 0; // no error
 }
+#endif
