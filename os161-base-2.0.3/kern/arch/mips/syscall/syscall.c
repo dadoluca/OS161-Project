@@ -141,16 +141,17 @@ syscall(struct trapframe *tf)
             (size_t)tf->tf_a2,
             &err);
         break;
-      case SYS_chdir:
-        err = 0;
-        break;
       case SYS_dup2:
         err = sys_dup2(
           (int) tf->tf_a0,
           (int) tf->tf_a1,
           &retval);
       break;
-
+      case SYS_chdir:
+			err = sys_chdir(
+				(char *) tf->tf_a0
+			);
+		break;        break;
       case SYS_lseek:
        err = 0;
         break;

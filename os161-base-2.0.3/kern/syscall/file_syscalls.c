@@ -305,7 +305,7 @@ int sys_dup2(int old_fd, int new_fd, int *retval) {
 
     struct openfile *of;
 
-    /* cech if the curproc is valid*/
+    /* check if the curproc is valid*/
     KASSERT(curproc != NULL);
 
     /* validate input arguments */
@@ -347,9 +347,48 @@ int sys_dup2(int old_fd, int new_fd, int *retval) {
     lock_release(of->lock);
 
     /* assignment  new_fd*/
-    curproc->fileTable[new_fd] = of;
+    curproc->fileTable[new_fd] = of;   
 
     *retval = new_fd;
     return 0;
+}
+#endif
+
+#if OPT_SHELL
+int sys_chdir(const char *pathname) {
+
+  // create a buffer
+  char *kbuffer = (char *) kmalloc(PATH_MAX * sizeof(char));
+  if (kbuffer == NULL) {
+    return ENOMEM;
+  }
+
+  int result = copyinstr((const_userptr_t) pathname, kbuffer, PATH_MAX, NULL);
+  if (result) {
+    kfree(kbuffer);
+    // Return an error if copyinstr encounter a problem it could be EFAULT
+    return result;
+  }
+
+  // Set vnode to represent the directory
+  struct vnode *vn = NULL;
+  // Open dir pointed by pathname
+  result = vfs_open(kbuffer, O_RDONLY, 0644, &vn);
+  if (result) {
+      kfree(kbuffer);
+      return result; 
+  }
+  kfree(kbuffer);
+
+  // Change current dir
+  result = vfs_setcurdir(vn);
+  if (result) {
+      vfs_close(vn);
+      return result;
+  }
+
+  // Close the vn because no longer needed. Dir already set
+  vfs_close(vn);
+  return 0; // no error
 }
 #endif
