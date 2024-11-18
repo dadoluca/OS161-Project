@@ -290,7 +290,6 @@ sys_close(int fd)
   curproc->fileTable[fd] = NULL;
 
   if (of->countRef == 0) {
-    of->vn = NULL;
     vfs_close(of->vn);
     lock_release(of->lock);
     lock_destroy(of->lock);
@@ -368,7 +367,7 @@ int sys_chdir(const char *pathname) {
   if (result) {
     kfree(kbuffer);
     // Return an error if copyinstr encounter a problem it could be EFAULT
-    return result
+    return result;
   }
 
   // Set vnode to represent the directory
@@ -391,5 +390,42 @@ int sys_chdir(const char *pathname) {
   // Close the vn because no longer needed. Dir already set
   vfs_close(vn);
   return 0; // no error
+}
+#endif
+
+#if OPT_SHELL
+int sys_getcwd(const char *buf, size_t buflen, int *retval) {
+
+    /* check if the curproc is valid*/
+    KASSERT(curthread != NULL);
+    KASSERT(curthread->t_proc != NULL);
+
+    //* Initialize a UIO structure for user-space buffer interaction */
+    struct uio u;
+    struct iovec iov;
+
+    /* Set up the I/O vector with the user-provided buffer and its length */
+    iov.iov_ubase = (userptr_t) buf;            
+    iov.iov_len = buflen;
+
+    /* Configure the UIO structure for reading into user space */
+    u.uio_iov = &iov;
+    u.uio_iovcnt = 1;
+    u.uio_resid = buflen;
+    u.uio_offset = 0;
+    u.uio_segflg = UIO_USERSPACE;
+    u.uio_rw = UIO_READ;
+    u.uio_space = curthread->t_proc->p_addrspace;
+
+    /* Fetch the current working directory path using VFS */
+    int err = vfs_getcwd(&u);
+    if (err) {
+      return err;
+    }
+
+    /* Calculate the length of the returned path */
+    *retval = buflen - u.uio_resid;
+    
+    return 0;
 }
 #endif
