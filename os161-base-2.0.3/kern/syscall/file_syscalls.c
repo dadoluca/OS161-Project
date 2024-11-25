@@ -95,54 +95,74 @@ int sys_read(int fd, userptr_t buf, size_t size, int *retval) {
     int result, nread;
     void *kbuf;
 
+    /* checking if fd is valid */
     if (fd < 0 || fd >= OPEN_MAX) {
         *retval = EBADF;
         return -1;
     } 
     of = curproc->fileTable[fd];
+    /* checking if the file is on the fileTable*/
     if (of == NULL) {
         *retval = EBADF;
         return -1;
     }
+    /* checking if the file is one in a correct mode */
     if (of->mode != O_RDONLY && of->mode != O_RDWR) {
         *retval = EBADF;
         return -1;
     }
     vn = of->vn;
+    /* checking if the vnode, associated with the file, exists */
     if (vn == NULL) {
         *retval = EBADF;
         return -1;
     }
 
+    /* allocate a temporary kernel buffer for the operation */
     kbuf = kmalloc(size);
     if (kbuf == NULL) {
         *retval = ENOMEM;
         return -1;
     }
-    //Trying to copy the content of the user buffer in a Kernel buffer to make it check its validity
+
+    /* copying the content of the user buffer into the kernel buffer */
     if (copyin(buf, kbuf, size)) {
         kfree(kbuf);
         *retval = EFAULT;
         return -1;
     }
 
+    /* acquiring the lock */
     lock_acquire(of->lock);
-    uio_kinit(&iov, &ku, kbuf, size, of->offset, UIO_READ);
-    result = VOP_READ(vn, &ku);
 
+    /* initializing the uio structure to the read operation */
+    uio_kinit(&iov, &ku, kbuf, size, of->offset, UIO_READ);
+
+    /* performing the read operation */
+    result = VOP_READ(vn, &ku);
     if (result) {
         kfree(kbuf);
         *retval = result;
         return -1;
     }
+
+    /* updating the file offset based on the number of bytes read */
     of->offset = ku.uio_offset;
+    /* computing the actual read bytes */
     nread = size - ku.uio_resid;
+    
+    /* copying the read data from the kernel buffer to the user buffer */
     if (copyout(kbuf, buf, nread)) {
         *retval = EFAULT;
         return -1;
     }
+
+    /* release the lock */
     lock_release(of->lock);
+
+    /* freeing the kernel buffer */
     kfree(kbuf);
+    
     return nread;
 }
 
