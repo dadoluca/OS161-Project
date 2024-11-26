@@ -81,6 +81,7 @@ syscall(struct trapframe *tf)
   int callno;
   int32_t retval;
   int64_t retval_64;
+  off_t pos;
   int err=0;
 
   KASSERT(curthread != NULL);
@@ -99,7 +100,7 @@ syscall(struct trapframe *tf)
    */
 
   retval = 0;
-  retval_64 = 0;
+	retval_64 = 0;
 
   switch (callno) {
       case SYS_reboot:
@@ -151,9 +152,16 @@ syscall(struct trapframe *tf)
 			err = sys_chdir(
 				(char *) tf->tf_a0
 			);
-		break;        break;
+		break;
       case SYS_lseek:
-       err = 0;
+        pos = tf->tf_a2;
+        pos <<= 32;
+        pos |= tf->tf_a3;
+        err = sys_lseek(
+          (int) tf->tf_a0,
+          pos,
+          *(int32_t *)(tf->tf_sp+16),
+          &retval_64);
         break;
       case SYS__exit:
           /* TODO: just avoid crash */
@@ -161,6 +169,9 @@ syscall(struct trapframe *tf)
         break;
       case SYS_fork:
           err = sys_fork(tf,&retval);
+        break;
+      case SYS_waitpid:
+          err = 0;
         break;
 #endif
 
