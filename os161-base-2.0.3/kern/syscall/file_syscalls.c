@@ -41,50 +41,62 @@ int sys_write(int fd, userptr_t buf, size_t size, int *retval) {
   int result, nwrite;
   void *kbuf;
 
+  /* checking if fd is valid */
   if (fd < 0 || fd > OPEN_MAX){
-        *retval = EBADF;
-        return -1;
-    } 
-    of = curproc->fileTable[fd];
-    if (of == NULL){
-        *retval = EBADF;
-        return -1;
-    }
-    if(of->mode != O_WRONLY && of->mode!=O_RDWR){
-        *retval = EBADF;
-        return -1;
-    }
-    vn = of->vn;
-    if (vn == NULL){
-        *retval = EBADF;
-        return -1;
-    } 
+    return EBADF;
+  } 
+  of = curproc->fileTable[fd];
+  /* checking if the file is on the fileTable*/
+  if (of == NULL){
+    return EBADF;
+  }
+  /* checking if the file is one in a correct mode */
+  if(of->mode != O_WRONLY && of->mode!=O_RDWR){
+    return EBADF;
+  }
+  vn = of->vn;
+  /* checking if the vnode, associated with the file, exists */
+  if (vn == NULL){
+    return EBADF;
+  }
 
+  /* allocate a temporary kernel buffer for the operation */
+  kbuf = kmalloc(size);
+  if(kbuf == NULL){
+    return ENOMEM;
+  }
 
-    kbuf = kmalloc(size);
-    if(kbuf == NULL){
-        *retval = ENOMEM;
-        return -1;
-    }
-    if(copyin(buf, kbuf, size)){
-        *retval = EFAULT; //buf is outside the accessible address space
-        kfree(kbuf);
-        return -1;
-    }
-    lock_acquire(of->lock); //writing acquiring the lock to be the only one doing it
-    uio_kinit(&iov, &ku, kbuf, size, of->offset, UIO_WRITE);
+  /* copying the content of the user buffer into the kernel buffer */
+  if(copyin(buf, kbuf, size)){
+      kfree(kbuf);
+      return EFAULT; //buf is outside the accessible address space
+  }
 
-    result = VOP_WRITE(vn, &ku);
-    if (result) {
-        kfree(kbuf);
-        *retval = result;
-        return -1;
-    }
-    kfree(kbuf);
-    of->offset = ku.uio_offset;
-    nwrite = size - ku.uio_resid;
-    lock_release(of->lock);
-    return nwrite;
+  /* acquiring the lock */
+  lock_acquire(of->lock);
+
+  /* initializing the uio structure to the read operation */
+  uio_kinit(&iov, &ku, kbuf, size, of->offset, UIO_WRITE);
+
+  /* performing the write operation */
+  result = VOP_WRITE(vn, &ku);
+  if (result) {
+      kfree(kbuf);
+      return result;
+  }
+  /* freeing the kernel buffer */
+  kfree(kbuf);
+
+  /* updating the file offset based on the number of bytes written */
+  of->offset = ku.uio_offset;
+  /* computing the actual written bytes */
+  nwrite = size - ku.uio_resid;
+  /* release the lock */
+  lock_release(of->lock);
+
+  *retval = nwrite;
+
+  return 0;
 }
 
 int sys_read(int fd, userptr_t buf, size_t size, int *retval) {
@@ -414,29 +426,29 @@ int sys_lseek(int fd, off_t pos, int whence, int64_t* retval) {
       break;
 
     case SEEK_CUR:
-            if (pos < 0 && -pos > of->offset) {
-                lock_release(of->lock);
-                return EINVAL;
-            }
-            new_off = of->offset + pos;
-        break;
+      if (pos < 0 && -pos > of->offset) {
+          lock_release(of->lock);
+          return EINVAL;
+      }
+      new_off = of->offset + pos;
+      break;
         
-        case SEEK_END:
-            err = VOP_STAT(of->vn, &info);
-            if (err) {
-                lock_release(of->lock);
-                return err;
-            }
-            if (pos < 0 && -pos > info.st_size) {
-                lock_release(of->lock);
-                return EINVAL;
-            }
-            new_off = info.st_size - pos;
-        break;
+    case SEEK_END:
+      err = VOP_STAT(of->vn, &info);
+      if (err) {
+          lock_release(of->lock);
+          return err;
+      }
+      if (pos < 0 && -pos > info.st_size) {
+          lock_release(of->lock);
+          return EINVAL;
+      }
+      new_off = info.st_size - pos;
+      break;
 
-        default:
-            lock_release(of->lock);
-            return EINVAL;
+    default:
+      lock_release(of->lock);
+      return EINVAL;
   }
 
   // updating the offset
