@@ -1,17 +1,25 @@
 #include <types.h>
-#include <kern/unistd.h>
-#include <kern/errno.h>
-#include <clock.h>
-#include <copyinout.h>
-#include <syscall.h>
-#include <lib.h>
 #include <proc.h>
+#include <current.h>
+#include <vnode.h>
+#include <vfs.h>
+#include <uio.h>
+#include <synch.h>
+#include <kern/errno.h>
+#include <kern/fcntl.h>
+#include <copyinout.h>
+#include <limits.h>
+#include <kern/unistd.h>
+#include <endian.h>
+#include <stat.h>
+#include <lib.h>
 #include <thread.h>
 #include <addrspace.h>
-#include <mips/trapframe.h>
-#include <current.h>
-#include <synch.h>
 #include <kern/wait.h>
+#include <mips/trapframe.h>
+#include <syscall.h>
+#include "exec.h"
+
 
 /*
  * system calls for process management
@@ -196,5 +204,79 @@ int sys_fork(struct trapframe *ctf, pid_t *retval) {
   *retval = newp->p_pid;
 
   return 0;
+}
+#endif
+
+
+
+#if OPT_SHELL
+int sys_execv(const char *progname, char *argv[]) {
+
+    
+	/* SOME ASSERTIONS */
+	KASSERT(curproc != NULL);
+
+	/* CASTING PARAMETER */
+    userptr_t prog = (userptr_t) progname;
+    userptr_t uargv = (userptr_t) argv;
+	
+	vaddr_t entrypoint, stackptr;
+	int argc;
+	int err;
+
+	/* ALLOCATING SPACE FOR PROGNAME IN KERNEL SIDE */
+	char *kpath = (char *) kmalloc(PATH_MAX * sizeof(char));
+	if (kpath == NULL) {
+		return ENOMEM;
+	}
+
+	/* COPYING PROGNAME IN KERNEL SIDE */
+	err = copyinstr(prog, kpath, PATH_MAX, NULL);
+	if (err) {
+		kfree(kpath);
+		return err;
+	}
+
+	/* COPY ARGV FROM USER SIDE TO KERNEL SIDE */
+	argbuf_t kargv; 
+	argbuf_init(&kargv);	
+	err = argbuf_fromuser(&kargv, uargv);
+	if (err) {
+		argbuf_cleanup(&kargv);
+		kfree(kpath);
+		return err;
+	}
+
+	/**
+	 * LOAD THE EXECUTABLE
+	 * NB: must not fail from here on, the old address space has been destroyed
+	 * 	   and, therefore, there is nothing to restore in case of failure.
+	 */
+	err = loadexec(kpath, &entrypoint, &stackptr);
+	if (err) {
+		argbuf_cleanup(&kargv);
+		kfree(kpath);
+		return err;
+	}
+
+	/* Goodbye kpath, you useless now... */
+	kfree(kpath);
+
+	/* COPY ARGV FROM KERNEL SIDE TO PROCESS (USER) SIDE */
+	err = argbuf_copyout(&kargv, &stackptr, &argc, &uargv);
+	if (err) {
+		/* if copyout fails, *we* messed up, so panic */
+		panic("execv: copyout_args failed: %s\n", strerror(err));
+	}
+
+	/* free the argv buffer space */
+	argbuf_cleanup(&kargv);
+
+	/* Warp to user mode. */
+	enter_new_process(argc, uargv, NULL /*uenv*/, stackptr, entrypoint);
+
+	/* enter_new_process does not return. */
+	panic("enter_new_process returned\n");
+	return EINVAL;
 }
 #endif

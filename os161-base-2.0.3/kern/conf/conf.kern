@@ -398,6 +398,7 @@ file      main/menu.c
 defoption shell
 optfile shell syscall/file_syscalls.c
 optfile shell syscall/proc_syscalls.c
+optfile shell syscall/exec.c
 
 ########################################
 #                                      #

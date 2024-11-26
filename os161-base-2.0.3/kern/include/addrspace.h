@@ -30,6 +30,8 @@
 #ifndef _ADDRSPACE_H_
 #define _ADDRSPACE_H_
 
+#define PAGETABLE_SIZE 1024
+
 /*
  * Address space structure and operations.
  */
@@ -39,6 +41,14 @@
 #include "opt-dumbvm.h"
 
 struct vnode;
+
+struct region {     
+    vaddr_t vbase;
+    size_t npages;
+    uint32_t writeable_bit;
+    uint32_t old_writeable_bit;
+    struct region *next;
+};
 
 
 /*
@@ -59,6 +69,12 @@ struct addrspace {
         paddr_t as_stackpbase;
 #else
         /* Put stuff here for your VM system */
+        
+        /* Regions map of this address space. */
+        struct region *regions;
+        
+        /* Root pagetable. */
+        paddr_t **ptable;
 #endif
 };
 

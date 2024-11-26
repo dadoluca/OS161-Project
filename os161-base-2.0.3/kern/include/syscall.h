@@ -76,7 +76,10 @@ void sys__exit(int status);
 int sys_waitpid(pid_t pid, userptr_t statusp, int options, int *retval);
 pid_t sys_getpid(void);
 int sys_fork(struct trapframe *ctf, pid_t *retval);
-int sys_chdir(const char *pathname);
+
+int sys_execv(const char *pathname, char *argv[]);
+void exec_bootstrap(void);
+
 #endif
 
 #endif /* _SHELL_ */

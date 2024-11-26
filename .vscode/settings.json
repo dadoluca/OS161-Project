@@ -19,6 +19,8 @@
         "tuple": "c",
         "type_traits": "c",
         "utility": "c",
-        "fcntl.h": "c"
+        "fcntl.h": "c",
+        "proc.h": "c",
+        "spl.h": "c"
     }
 }

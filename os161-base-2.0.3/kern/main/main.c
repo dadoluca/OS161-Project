@@ -50,6 +50,9 @@
 #include <test.h>
 #include <version.h>
 #include "autoconf.h"  // for pseudoconfig
+#if OPT_SHELL
+#include "exec.h"
+#endif
 
 /*
  * These two pieces of data are maintained by the makefiles and build system.
@@ -125,6 +128,9 @@ boot(void)
 	/* Late phase of initialization. */
 	vm_bootstrap();
 	kprintf_bootstrap();
+	#if OPT_SHELL
+		exec_bootstrap();
+	#endif
 	thread_start_cpus();
 
 	/* Default bootfs - but ignore failure, in case emu0 doesn't exist */

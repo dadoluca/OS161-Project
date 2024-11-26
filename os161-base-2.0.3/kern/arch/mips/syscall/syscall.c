@@ -148,10 +148,10 @@ syscall(struct trapframe *tf)
           &retval);
       break;
       case SYS_chdir:
-			err = sys_chdir(
-				(char *) tf->tf_a0
-			);
-		break;        break;
+        err = sys_chdir(
+          (char *) tf->tf_a0
+        );
+		break;        
       case SYS_lseek:
        err = 0;
         break;
@@ -162,6 +162,12 @@ syscall(struct trapframe *tf)
       case SYS_fork:
           err = sys_fork(tf,&retval);
         break;
+      case SYS_execv:
+        err = sys_execv(
+          (char *) tf->tf_a0,
+          (char **) tf->tf_a1
+        );
+		break;
 #endif
 
     default:
