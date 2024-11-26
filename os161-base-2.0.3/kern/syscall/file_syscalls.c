@@ -109,39 +109,33 @@ int sys_read(int fd, userptr_t buf, size_t size, int *retval) {
 
     /* checking if fd is valid */
     if (fd < 0 || fd >= OPEN_MAX) {
-        *retval = EBADF;
-        return -1;
+      return EBADF;
     } 
     of = curproc->fileTable[fd];
     /* checking if the file is on the fileTable*/
     if (of == NULL) {
-        *retval = EBADF;
-        return -1;
+      return EBADF;
     }
     /* checking if the file is one in a correct mode */
     if (of->mode != O_RDONLY && of->mode != O_RDWR) {
-        *retval = EBADF;
-        return -1;
+      return EBADF;
     }
     vn = of->vn;
     /* checking if the vnode, associated with the file, exists */
     if (vn == NULL) {
-        *retval = EBADF;
-        return -1;
+      return EBADF;
     }
 
     /* allocate a temporary kernel buffer for the operation */
     kbuf = kmalloc(size);
     if (kbuf == NULL) {
-        *retval = ENOMEM;
-        return -1;
+      return ENOMEM;
     }
 
     /* copying the content of the user buffer into the kernel buffer */
     if (copyin(buf, kbuf, size)) {
-        kfree(kbuf);
-        *retval = EFAULT;
-        return -1;
+      kfree(kbuf);
+      return EFAULT;
     }
 
     /* acquiring the lock */
@@ -153,9 +147,8 @@ int sys_read(int fd, userptr_t buf, size_t size, int *retval) {
     /* performing the read operation */
     result = VOP_READ(vn, &ku);
     if (result) {
-        kfree(kbuf);
-        *retval = result;
-        return -1;
+      kfree(kbuf);
+      return result;
     }
 
     /* updating the file offset based on the number of bytes read */
@@ -165,8 +158,7 @@ int sys_read(int fd, userptr_t buf, size_t size, int *retval) {
     
     /* copying the read data from the kernel buffer to the user buffer */
     if (copyout(kbuf, buf, nread)) {
-        *retval = EFAULT;
-        return -1;
+      return EFAULT;
     }
 
     /* release the lock */
@@ -175,7 +167,9 @@ int sys_read(int fd, userptr_t buf, size_t size, int *retval) {
     /* freeing the kernel buffer */
     kfree(kbuf);
     
-    return nread;
+    *retval = nread;
+    
+    return 0;
 }
 
 /*
