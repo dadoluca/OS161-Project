@@ -290,6 +290,7 @@ sys_open(userptr_t path, int openflags, mode_t mode, int *retval)
     return ENOMEM;
   }
 
+  /* update the countRef, meaning that we have opened the file */
   of->countRef = 1;
   
   *retval = fd;
@@ -303,23 +304,31 @@ sys_open(userptr_t path, int openflags, mode_t mode, int *retval)
 int
 sys_close(int fd)
 {
-  
-  // if fd is not a valid number or is not refering to a valid entry of the fileTable, return EBADF (Bad file number)
+  /* checking if fd is valid and refers to a valid entry of the file table */
   if (fd < 0 || fd >= OPEN_MAX || curproc->fileTable[fd] == NULL) {
     return EBADF;       
   }
 
   struct openfile *of = curproc->fileTable[fd];
-  // acquiring the lock to modify the value of count ref to the file, decreasing it by one
+
+  /* acquire the lock */
   lock_acquire(of->lock);
+
+  /* decrease the countRef, meaning that we have closed a file */
   of->countRef--;
+  /* removing, from the file table, the refers to the fd */
   curproc->fileTable[fd] = NULL;
 
+  /* if there are no more references to the file exists, clean up resources */
   if (of->countRef == 0) {
+    /* close the vnode */
     vfs_close(of->vn);
+    /* release the lock */
     lock_release(of->lock);
+    /* destroy the lock */
     lock_destroy(of->lock);
   } else {
+    /* release the lock */
     lock_release(of->lock);
   }
   return 0;
