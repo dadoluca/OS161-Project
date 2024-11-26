@@ -168,7 +168,7 @@ int sys_read(int fd, userptr_t buf, size_t size, int *retval) {
     kfree(kbuf);
     
     *retval = nread;
-    
+
     return 0;
 }
 
@@ -181,40 +181,40 @@ sys_open(userptr_t path, int openflags, mode_t mode, int *retval)
   int fd, i;
   struct vnode *v;
   struct openfile *of=NULL;
+  size_t len;
 
+  /* checking if path is valid */
   if (path == NULL || path == (userptr_t)0) {
-    *retval = EFAULT;
-    return -1;
+    return EFAULT;
   }
 
-  /* Copying pathname to kernel side */
+  /* allocating a kernel buffer for copying the file path */
   char *kbuffer = (char *) kmalloc(PATH_MAX * sizeof(char));
   if (kbuffer == NULL) {
-    *retval = ENOMEM;
-    return -1;
+    return ENOMEM;
   }
 
-  size_t len;
+  /* copying the file path from the user to the kernel buffer */
   int err = copyinstr((const_userptr_t) path, kbuffer, PATH_MAX, &len); // may return EFAULT
   if (err) {
     kfree(kbuffer);
-    *retval = EFAULT;
-    return -1;
+    return EFAULT;
   }
 
+  /* making sure that the path is not in the kernel address space */
   if((vaddr_t)path >= 0x80000000) {
     kfree(kbuffer);
-    *retval = EFAULT;
-    return -1;
+    return EFAULT;
   }
 
+  /* opening the vnode associated with the path */
   err = vfs_open(kbuffer, openflags, mode, &v);
   kfree(kbuffer);
   if (err) {
-    *retval = err;
-    return -1;
+    return err;
   }
 
+  /* finding an available slot in the system file table, setting parameters */
   for (i=0; i<SYSTEM_OPEN_MAX; i++) {
     if (systemFileTable[i].vn==NULL) {
       of = &systemFileTable[i];
@@ -224,45 +224,46 @@ sys_open(userptr_t path, int openflags, mode_t mode, int *retval)
     }
   }
 
+  /* no free slot in system file table */
   if (of==NULL) { 
-    // no free slot in system open file table
     vfs_close(v);
     return ENFILE;
   }
 
-  // assigning openfile to current process filetable
-  for (fd=STDERR_FILENO+1; fd<OPEN_MAX; fd++) {// skipping STDIN, STDOUT and STDERR
+  /* finding an available slot in the current process file table */
+  for (fd=STDERR_FILENO+1; fd<OPEN_MAX; fd++) { // skipping STDIN, STDOUT and STDERR
     if (curproc->fileTable[fd] == NULL) {
       curproc->fileTable[fd] = of;
       break;
     }
   }
 
+  /* no free slot in process open file table */
   if(fd == OPEN_MAX) {
-    // no free slot in process open file table
     vfs_close(v);
     return EMFILE;
   }
 
-  // managing the way to read the file
+  /* managing the way to read the file */
   if (openflags & O_APPEND) {
-    // retrieve file size
     struct stat filest;
+    /* retrieve file infos */
     err = VOP_STAT(v, &filest);
+
     if (err) {
       curproc->fileTable[fd] = NULL;
       vfs_close(v);
-      *retval = err;
-      return -1;
+      return err;
     }
-    // putting the offset at the end of the file (starting at the end)
+    /* putting the offset at the end of the file (starting at the end) */
     of->offset = filest.st_size;
   } else {
-    // starting at the beginning, putting the offset of the file table at 0
+
+    /* starting at the beginning, putting the offset of the file table at 0 */
     of->offset = 0;
   }
 
-  // different modes
+  /* setting the file's access mode */
   switch(openflags & O_ACCMODE){
     case O_RDONLY: // read only mode
       of->mode = O_RDONLY;
@@ -276,25 +277,24 @@ sys_open(userptr_t path, int openflags, mode_t mode, int *retval)
 		default: // none of the specified mode
 			vfs_close(v);
 			curproc->fileTable[fd] = NULL;
-      *retval = EINVAL;
-			return -1;
+      return EINVAL;
   }
 
-  // creating the lock on the file
+  /* creating the lock on the file */
   of->lock = lock_create("file_lock");
-  // if the lock is equal to NULL means that something went wrong during the creation process
+
+  /* if the lock is equal to NULL means that something went wrong during the creation process */
   if (of->lock == NULL) {
     vfs_close(v);
     curproc->fileTable[fd] = NULL;
-    *retval = ENOMEM;
-		return -1;
+    return ENOMEM;
   }
 
   of->countRef = 1;
   
-  // task completed, returning 0 and the fd
-  *retval = 0;
-  return fd;
+  *retval = fd;
+
+  return 0;
 }
 
 /*

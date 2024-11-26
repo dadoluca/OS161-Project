@@ -115,11 +115,11 @@ syscall(struct trapframe *tf)
       /* Add stuff here */
 #if OPT_SHELL
       case SYS_open:
-          retval = sys_open(
+          err = sys_open(
             (userptr_t)tf->tf_a0,
             (int)tf->tf_a1,
             (mode_t)tf->tf_a2,
-            &err);
+            &retval);
         break;
       case SYS_close:
           err = sys_close((int)tf->tf_a0);
