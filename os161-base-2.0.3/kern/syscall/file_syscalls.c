@@ -33,6 +33,7 @@ void openfileIncrRefCount(struct openfile *of) {
     of->countRef++;
 }
 
+#if OPT_SHELL
 int sys_write(int fd, userptr_t buf, size_t size, int *retval) {
   struct iovec iov;
   struct uio ku;
@@ -98,7 +99,9 @@ int sys_write(int fd, userptr_t buf, size_t size, int *retval) {
 
   return 0;
 }
+#endif
 
+#if OPT_SHELL
 int sys_read(int fd, userptr_t buf, size_t size, int *retval) {
     struct iovec iov;
     struct uio ku;
@@ -171,10 +174,12 @@ int sys_read(int fd, userptr_t buf, size_t size, int *retval) {
 
     return 0;
 }
+#endif
 
 /*
  * file system calls for open/close
  */
+#if OPT_SHELL
 int
 sys_open(userptr_t path, int openflags, mode_t mode, int *retval)
 {
@@ -297,10 +302,12 @@ sys_open(userptr_t path, int openflags, mode_t mode, int *retval)
 
   return 0;
 }
+#endif
 
 /*
  * file system calls for open/close
  */
+#if OPT_SHELL
 int
 sys_close(int fd)
 {
@@ -333,59 +340,63 @@ sys_close(int fd)
   }
   return 0;
 }
-
+#endif
 
 #if OPT_SHELL
 int sys_dup2(int old_fd, int new_fd, int *retval) {
+  struct openfile *of;
 
-    struct openfile *of;
+  /* checking if the curproc is valid */
+  KASSERT(curproc != NULL);
 
-    /* check if the curproc is valid*/
-    KASSERT(curproc != NULL);
+  /* validate input arguments */
+  if (old_fd < 0 || old_fd >= OPEN_MAX || new_fd < 0 || new_fd >= OPEN_MAX) {
+    /* fd must be in the valid range [0, OPEN_MAX] */
+    return EBADF;   // invalid file handler
+  } else if (curproc->fileTable[old_fd] == NULL) {
+    /* the old fd must refer to an open file */
+    return EBADF;   // invalid file handler
+  } else if (old_fd == new_fd) {
+      /* the two handles refer to the same "open" of the file - that is, they are references to the same object and share the same seek pointer */
+    *retval = old_fd; //return value
+    return 0; 
+  } 
+  /* check if new_fd refers to an open file */
+  if (curproc->fileTable[new_fd] != NULL) {
+    /* close the file currently associated with new_fd */
+    of = curproc->fileTable[new_fd];
 
-    /* validate input arguments */
-    if (old_fd < 0 || old_fd >= OPEN_MAX || new_fd < 0 || new_fd >= OPEN_MAX) {
-      /*fd must be in the valid range [0, OPEN_MAX]*/
-        return EBADF;   // invalid file handler
-    } else if (curproc->fileTable[old_fd] == NULL) {
-      /*the old fd must refer to an open file*/
-        return EBADF;   // invalid file handler
-    } else if (old_fd == new_fd) {
-        /* The two handles refer to the same "open" of the file - that is, they are references to the same object and share the same seek pointer. */
-        *retval = old_fd; //return value
-        //kprintf("\nretval = %d\n",*retval);
-        return 0;   //no error 
-    } 
-
-    /* Ccheck if new_fd refers to an open file */
-    if (curproc->fileTable[new_fd] != NULL) {
-        
-        /* Close the file currently associated with new_fd */
-        of = curproc->fileTable[new_fd];
-        lock_acquire(of->lock);
-        curproc->fileTable[new_fd] = NULL;
-        if (--of->countRef == 0) {
-
-            /* If no processes are referencing this file, clean up resources */
-            struct vnode *vn = of->vn;
-            of->vn = NULL;
-            vfs_close(vn);
-        }
-        lock_release(of->lock);
-        of = NULL;
-    }
-
-    /* increment of the count references */
-    of = curproc->fileTable[old_fd];
+    /* acquire the lock */
     lock_acquire(of->lock);
-    of->countRef++;
+
+    curproc->fileTable[new_fd] = NULL;
+
+    /* if no processes are referencing this file, clean up resources */
+    if (--of->countRef == 0) {
+      struct vnode *vn = of->vn;
+      of->vn = NULL;
+      /* close the vnode */
+      vfs_close(vn);
+    }
+    /* release the lock */
     lock_release(of->lock);
+    of = NULL;
+  }
 
-    /* assignment  new_fd*/
-    curproc->fileTable[new_fd] = of;
+  /* increment of the count references */
+  of = curproc->fileTable[old_fd];
+  /* acquire the lock */
+  lock_acquire(of->lock);
+  of->countRef++;
+  /* release the lock */
+  lock_release(of->lock);
 
-    *retval = new_fd;
-    return 0;
+  /* assignment  new_fd */
+  curproc->fileTable[new_fd] = of;
+
+  *retval = new_fd;
+
+  return 0;
 }
 #endif
 
@@ -393,23 +404,26 @@ int sys_dup2(int old_fd, int new_fd, int *retval) {
 int sys_lseek(int fd, off_t pos, int whence, int64_t* retval) {
   struct openfile *of;
 
+  /* checking if the curproc is valid */
   KASSERT(curproc != NULL);
 
+  /* checking if fd is valid */
   if (fd < 0 || fd >= OPEN_MAX) {
     return EBADF;
   }
 
-  /* retrieve file struct from file descriptor and check it is a valid file */
+  /* checking if the openfile associated to the fd is valid */
   of = curproc->fileTable[fd];
   if (of == NULL) {
     return EBADF;
   }
 
+  /* checking if the vnode, associated to the fd, exists */
   if (of->vn == NULL) {
     return EBADF;
   }
 
-  /* check if the file is seekable */
+  /* checking if the object is a seekable one */
   if (!VOP_ISSEEKABLE(of->vn)) {
     return ESPIPE;
   }
@@ -418,8 +432,12 @@ int sys_lseek(int fd, off_t pos, int whence, int64_t* retval) {
   int err;
   int new_off;
 
+  /* acquiring the lock */
   lock_acquire(of->lock);
+
+  /* switch for each different whence */
   switch (whence) {
+    /* setting position as pos */
     case SEEK_SET:
       if (pos < 0) {
         lock_release(of->lock);
@@ -427,24 +445,26 @@ int sys_lseek(int fd, off_t pos, int whence, int64_t* retval) {
       }
       new_off = pos;
       break;
-
+    /* setting position as position + pos */
     case SEEK_CUR:
       if (pos < 0 && -pos > of->offset) {
-          lock_release(of->lock);
-          return EINVAL;
+        /* release the lock */
+        lock_release(of->lock);
+        return EINVAL;
       }
       new_off = of->offset + pos;
       break;
-        
+    /* setting position as end-of-file + pos */   
     case SEEK_END:
       err = VOP_STAT(of->vn, &info);
       if (err) {
-          lock_release(of->lock);
-          return err;
+        lock_release(of->lock);
+        return err;
       }
+      /* checking if -pos higher then file size */
       if (pos < 0 && -pos > info.st_size) {
-          lock_release(of->lock);
-          return EINVAL;
+        lock_release(of->lock);
+        return EINVAL;
       }
       new_off = info.st_size - pos;
       break;
@@ -454,7 +474,7 @@ int sys_lseek(int fd, off_t pos, int whence, int64_t* retval) {
       return EINVAL;
   }
 
-  // updating the offset
+  /* updating the offset */
   of->offset = new_off;
   lock_release(of->lock);
 
