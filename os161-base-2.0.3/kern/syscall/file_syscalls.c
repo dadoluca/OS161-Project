@@ -402,37 +402,31 @@ int sys_dup2(int old_fd, int new_fd, int *retval) {
 
 #if OPT_SHELL
 int sys_lseek(int fd, off_t pos, int whence, int64_t* retval) {
-  struct openfile *of;
 
   /* checking if the curproc is valid */
   KASSERT(curproc != NULL);
 
   /* checking if fd is valid */
-  if (fd < 0 || fd >= OPEN_MAX) {
+  if(fd < 0 || fd >= OPEN_MAX || curproc->fileTable[fd] == NULL) {
     return EBADF;
   }
-
   /* checking if the openfile associated to the fd is valid */
-  of = curproc->fileTable[fd];
-  if (of == NULL) {
-    return EBADF;
-  }
-
-  /* checking if the vnode, associated to the fd, exists */
-  if (of->vn == NULL) {
+  struct openfile *of = curproc->fileTable[fd];
+  if(of == NULL) {
     return EBADF;
   }
 
   /* checking if the object is a seekable one */
-  if (!VOP_ISSEEKABLE(of->vn)) {
+  if(!VOP_ISSEEKABLE(of->vn)) {
     return ESPIPE;
   }
+
 
   struct stat info;
   int err;
   int new_off;
 
-  /* acquiring the lock */
+  /* take the lock */
   lock_acquire(of->lock);
 
   /* switch for each different whence */
@@ -448,27 +442,27 @@ int sys_lseek(int fd, off_t pos, int whence, int64_t* retval) {
     /* setting position as position + pos */
     case SEEK_CUR:
       if (pos < 0 && -pos > of->offset) {
-        /* release the lock */
+        /* release the lock, bc there is an error */
         lock_release(of->lock);
         return EINVAL;
       }
       new_off = of->offset + pos;
       break;
-    /* setting position as end-of-file + pos */   
+    /* setting position as end-of-file + pos */
     case SEEK_END:
       err = VOP_STAT(of->vn, &info);
       if (err) {
+        /* release the lock, bc there is an error */
         lock_release(of->lock);
         return err;
       }
       /* checking if -pos higher then file size */
-      if (pos < 0 && -pos > info.st_size) {
+      if (pos < 0 && -pos > info.st_size) { 
         lock_release(of->lock);
         return EINVAL;
       }
-      new_off = info.st_size - pos;
+      new_off = info.st_size + pos; //TODO: check the sign
       break;
-
     default:
       lock_release(of->lock);
       return EINVAL;
@@ -476,9 +470,12 @@ int sys_lseek(int fd, off_t pos, int whence, int64_t* retval) {
 
   /* updating the offset */
   of->offset = new_off;
+
+  /* syscall finish, release the lock */
   lock_release(of->lock);
 
   *retval = new_off;
+  /* success */
   return 0;
 }
 #endif
@@ -486,39 +483,41 @@ int sys_lseek(int fd, off_t pos, int whence, int64_t* retval) {
 #if OPT_SHELL
 int sys_chdir(const char *pathname) {
 
-  // create a buffer
+  /* create a buffer */
   char *kbuffer = (char *) kmalloc(PATH_MAX * sizeof(char));
   if (kbuffer == NULL) {
     return ENOMEM;
   }
 
+  /* create a space */
   int result = copyinstr((const_userptr_t) pathname, kbuffer, PATH_MAX, NULL);
   if (result) {
     kfree(kbuffer);
-    // Return an error if copyinstr encounter a problem it could be EFAULT
+    /* Return an error if copyinstr encounter a problem it could be EFAULT */
     return result;
   }
 
-  // Set vnode to represent the directory
+  /* Set vnode to represent the directory */
   struct vnode *vn = NULL;
-  // Open dir pointed by pathname
+  /* Open dir pointed by pathname */
   result = vfs_open(kbuffer, O_RDONLY, 0644, &vn);
   if (result) {
       kfree(kbuffer);
-      return result; 
+      return result;  /* return the error from the function vfs_open*/
   }
   kfree(kbuffer);
 
-  // Change current dir
+  /* Change current dir */
   result = vfs_setcurdir(vn);
   if (result) {
       vfs_close(vn);
       return result;
   }
 
-  // Close the vn because no longer needed. Dir already set
+  /* Close the vn because no longer needed. Dir already set */
   vfs_close(vn);
-  return 0; // no error
+  /* success */
+  return 0;
 }
 #endif
 

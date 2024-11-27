@@ -36,104 +36,109 @@ sys__exit(int status)
   panic("thread_exit returned (should not happen)\n");
 }
 
-int
-sys_waitpid(pid_t pid, userptr_t statusp, int options, int *retval)
-{
 #if OPT_SHELL
-  /*pid can be >0, -1 or <-1. The latter case is not considered because it references the group id (not handled)
-      pid = -1 should wait for any of its child 
-      this means that the pid is constrained to be >0*/
+
+int sys_waitpid(pid_t pid, userptr_t status, int options, int *retval)
+{
+  /*  
+    The PID can be greater than 0, -1, or less than -1. The case where the PID is less than -1 is not considered, as it refers to the group ID (which is not handled).
+    When PID is -1, it indicates the process should wait for any of its child processes.
+    This implies that the PID must be greater than 0.
+  */
+
+  /* assign retval=.1 in any case. in order to change it only un success cases */
+  *retval = -1;
 
   if (pid <= 0) { 
-      *retval = ENOSYS;
-      return -1;
+    return ENOSYS;
   }
-  /*ECHILD is returned if the process hasn't got any unwaiting children*/
+
+  /* ECHILD return if no children_list is found */
   if(curproc->p_children_list==NULL){
-    *retval = ECHILD;
-    return -1;
+    return ECHILD;
   }
-  /*Check that statusp is valid to pass badcall tests*/
-  if(statusp!=NULL){
-    int result;
+  /* Check that status is valid */
+  if(status!=NULL){
     int dummy;
-    result = copyin((const_userptr_t)statusp, &dummy, sizeof(dummy)); //It's easy to do it through copyin
+
+    int result = copyin((const_userptr_t)status, &dummy, sizeof(dummy));
+
     if (result) {
-        *retval = EFAULT;
-        return -1;
+        return EFAULT;
     }
   }
-  /*The process is allowed to wait only for a process that is its child*/
-  int ret = check_is_child(pid);
+
+
+  /* The process can wait only for its child*/
+  int res = check_is_child(pid);
+
   /*The process doesn't exist*/
-  if (ret == -1) { 
-    *retval = ESRCH;
-    return -1;
+  if (res == -1) { 
+    return ESRCH;  /* No such process */
   }
+
   /*The process is not a child of the calling process*/
-  if (ret == 0) { 
-    *retval = ECHILD;
-    return -1;
+  if (res == 0) { 
+    return ECHILD; /* No child processes */
   }
+
+
   struct proc *p = proc_search_pid(pid);
   switch (options) {
     case 0:
-      // No options, standard blocking wait
       break;
-    case WNOHANG:{
-      /*Check if any of the children of the calling process has terminated. In this case, return its pid and status, otherwise 0*/
-      struct proc *p= check_is_terminated(curproc);
+    case WNOHANG:{ /* WNOHANG: Nonblocking. */
+      /* Check if any of the children of the calling process has terminated. In this case, return its pid and status, otherwise 0 */
+      struct proc *p = check_is_terminated(curproc);
       if (p == NULL) {
-          return 0;
+          *retval = 0;
+          return 0; /* success */
       }
-      /*Otherwise it goes on with p, it performs the wait which is non-blocking, frees the list by the child and destroys the proc data structure*/
-      break;}
-    /*case WEXITED: { It's not standard
-      // Check if the child process has exited
-      if (p->p_terminated==1) {
-        break; // Exit normally if child has exited
-      }
-      *retval = ECHILD;
-      return -1;
-    }*/
-    default:{
-      *retval=EINVAL; 
-      return -1;
+      break;
     }
+    
+    default:
+      return EINVAL; /* invalid argument, we cant manage it */
+    
   }
   int s = proc_wait(p);
-  if (statusp != NULL) {
-      // Use a temporary variable to ensure alignment
+  if (status != NULL) {
+      /* We use a temporary variable in order to ensure alignment */
       int kstatus;
       kstatus = s;
-      // Copy the status back to user space
-      int result = copyout(&kstatus, statusp, sizeof(kstatus));
+
+      /* Copy the status back to user space */
+      int result = copyout(&kstatus, status, sizeof(kstatus));
       if (result) {
-          *retval = EFAULT;
-          return -1;
+          return EFAULT;
       }
   }
-  return pid;
-#endif
-}
 
-pid_t
-sys_getpid(void)
-{
-#if OPT_SHELL
-  KASSERT(curproc != NULL);
-  return curproc->p_pid;
+  *retval = pid;
+  /* success */
+  return 0;
+
 #endif
 }
 
 #if OPT_SHELL
-static void
-call_enter_forked_process(void *tfv, unsigned long dummy) {
+int sys_getpid(pid_t *retval) {
+    KASSERT(curproc != NULL); /*check that the currproc exists */
+    /* return the pid of the curr proc. it cant never fail*/
+    *retval = curproc->p_pid;
+    return 0;   
+}
+#endif
+
+
+#if OPT_SHELL
+static void call_enter_forked_process(void *tfv, unsigned long dummy) {
   struct trapframe *tf = (struct trapframe *)tfv;
   (void)dummy;
   enter_forked_process(tf); 
   panic("enter_forked_process returned (should not happen)\n");
 }
+
 
 int sys_fork(struct trapframe *ctf, pid_t *retval) {
   struct trapframe *tf_child;

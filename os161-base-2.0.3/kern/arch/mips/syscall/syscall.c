@@ -178,9 +178,27 @@ syscall(struct trapframe *tf)
           err = sys_fork(tf,&retval);
         break;
       case SYS_waitpid:
-          err = 0;
+        err = sys_waitpid(
+          (pid_t)tf->tf_a0,
+          (userptr_t)tf->tf_a1,
+          (int)tf->tf_a2,
+          &retval);
+        
         break;
-#endif
+
+
+    case SYS_getpid:
+			err = sys_getpid(
+				(pid_t *) &retval
+			);
+		break;
+
+
+    #endif
+
+
+
+
 
     default:
       kprintf("Unknown syscall %d\n", callno);
