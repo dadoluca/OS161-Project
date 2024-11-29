@@ -19,107 +19,95 @@
 void
 sys__exit(int status)
 {
-#if OPT_SHELL
-  struct proc *p = curproc;
-  p->p_status = status & 0xff; /* just lower 8 bits returned */
-  spinlock_acquire(&p->p_lock);
-  p->p_terminated = 1; // Process is terminated
-  spinlock_release(&p->p_lock);
-  proc_remthread(curthread);
-  proc_signal_end(p); // mark the end of the process without destroying it
-#else
-  /* get address space of current process and destroy */
-  struct addrspace *as = proc_getas();
-  as_destroy(as);
-#endif
-  thread_exit();
-  panic("thread_exit returned (should not happen)\n");
+  /* RETRIEVING STATUS OF THE CURRENT PROCESS */
+    struct proc *proc = curproc;
+    proc->p_status = _MKWAIT_EXIT(status);    /* exitcode & 0xff */
+
+    /* REMOVING THREAD BEFORE SIGNALLING DUE TO RACE CONDITIONS */
+    proc_remthread(curthread);        /* remove thread from current process */
+
+    /* SIGNALLING THE TERMINATION OF THE PROCESS */
+    lock_acquire(proc->p_locklock);
+    cv_signal(proc->p_cv, proc->p_locklock);
+    lock_release(proc->p_locklock);
+
+    /* MAIN THREAD TERMINATES HERE. BYE BYE */
+    thread_exit();
+
+    /* WAIT! YOU SHOULD NOT HAPPEN TO BE HERE */
+    panic("[!] Wait! You should not be here. Some errors happened during thread_exit()...\n");
 }
 
 #if OPT_SHELL
 
-int sys_waitpid(pid_t pid, userptr_t status, int options, int *retval)
+int sys_waitpid(pid_t pid, int *status, int options, int *retval)
 {
-  /*  
-    The PID can be greater than 0, -1, or less than -1. The case where the PID is less than -1 is not considered, as it refers to the group ID (which is not handled).
-    When PID is -1, it indicates the process should wait for any of its child processes.
-    This implies that the PID must be greater than 0.
-  */
+  /* SOME ASSERTIONS */
+    KASSERT(curproc != NULL);
 
-  /* assign retval=.1 in any case. in order to change it only un success cases */
-  *retval = -1;
-
-  if (pid <= 0) { 
-    return ENOSYS;
-  }
-
-  /* ECHILD return if no children_list is found */
-  if(curproc->p_children_list==NULL){
-    return ECHILD;
-  }
-  /* Check that status is valid */
-  if(status!=NULL){
-    int dummy;
-
-    int result = copyin((const_userptr_t)status, &dummy, sizeof(dummy));
-
-    if (result) {
+    /* CHECKING ARGUMENTS */
+    if (pid == curproc->p_pid) {
+        return ECHILD;
+    } else if (status == NULL) {
+        *retval = pid;
+        return 0;
+    }
+    /* TEMPORARY */
+    else if ((int) status == 0x40000000 || (unsigned int) status == (unsigned int) 0x80000000) {
+        return EFAULT;
+    } else if ((int) status % 4 != 0) {
         return EFAULT;
     }
-  }
-
-
-  /* The process can wait only for its child*/
-  int res = check_is_child(pid);
-
-  /*The process doesn't exist*/
-  if (res == -1) { 
-    return ESRCH;  /* No such process */
-  }
-
-  /*The process is not a child of the calling process*/
-  if (res == 0) { 
-    return ECHILD; /* No child processes */
-  }
-
-
-  struct proc *p = proc_search_pid(pid);
-  switch (options) {
-    case 0:
-      break;
-    case WNOHANG:{ /* WNOHANG: Nonblocking. */
-      /* Check if any of the children of the calling process has terminated. In this case, return its pid and status, otherwise 0 */
-      struct proc *p = check_is_terminated(curproc);
-      if (p == NULL) {
-          *retval = 0;
-          return 0; /* success */
-      }
-      break;
+    /*CHECKING IF TRYING TO WAIT FOR A NON-CHILD PROCESS*/
+    else if(is_child(curproc, pid)==-1){
+        return ECHILD;
     }
-    
-    default:
-      return EINVAL; /* invalid argument, we cant manage it */
-    
-  }
-  int s = proc_wait(p);
-  if (status != NULL) {
-      /* We use a temporary variable in order to ensure alignment */
-      int kstatus;
-      kstatus = s;
 
-      /* Copy the status back to user space */
-      int result = copyout(&kstatus, status, sizeof(kstatus));
-      if (result) {
-          return EFAULT;
-      }
-  }
+    /* OPTIONS */
+    switch (options) {
+        case 0:
+        break;
+        
+        case WNOHANG:
+            *status = 0;
+            *retval = pid;
+            return 0;
+        break;
 
-  *retval = pid;
-  /* success */
-  return 0;
+        default:
+            return EINVAL;
+    }
 
-#endif
+    /* RETRIEVING PROCESS */
+    struct proc *proc = proc_search_pid(pid);
+    if (proc == NULL) {
+        return ESRCH;
+    }
+
+    if (proc->p_numthreads == 0) {
+        *status = proc->p_status;
+        *retval = proc->p_pid;
+        proc_destroy(proc);
+        return 0;
+    }
+
+    /* WAITING TERMINATION OF THE PROCESS */
+    lock_acquire(proc->p_locklock);
+    cv_wait(proc->p_cv, proc->p_locklock);
+    lock_release(proc->p_locklock);
+
+    /* ASSIGNING RETURN STATUS */
+    *status = proc->p_status;
+    *retval = proc->p_pid;
+    if (status == NULL) {
+        return EFAULT;
+    }
+
+    /* TASK COMPLETED SUCCESSFULLY */
+    proc_destroy(proc);
+    return 0;
 }
+#endif
 
 #if OPT_SHELL
 int sys_getpid(pid_t *retval) {
@@ -132,74 +120,75 @@ int sys_getpid(pid_t *retval) {
 
 
 #if OPT_SHELL
-static void call_enter_forked_process(void *tfv, unsigned long dummy) {
-  struct trapframe *tf = (struct trapframe *)tfv;
-  (void)dummy;
-  enter_forked_process(tf); 
-  panic("enter_forked_process returned (should not happen)\n");
-}
-
-
 int sys_fork(struct trapframe *ctf, pid_t *retval) {
-  struct trapframe *tf_child;
-  struct proc *newp;
-  int result;
 
-  KASSERT(curproc != NULL);
+    /* ASSERTING CURRENT PROCESS TO ACTUALLY EXIST */
+    KASSERT(curproc != NULL);
 
-  if(proc_verify_pid() == -1) {
-    return ENPROC;
-  }
+    /* CHECKING SPACE AVAILABILITY IN PROCESS TABLE */
+    int index = get_valid_pid();
+    if (index <= 0) {
+        return ENPROC;  /* There are already too many processes on the system. */
+    }
 
-  newp = proc_create_runprogram(curproc->p_name);
-  if (newp == NULL) {
-    return ENOMEM;
-  }
+    /* CREATING NEW RUNNABLE PROCESS */
+    struct proc *newproc = proc_create_runprogram(curproc->p_name);
+    if (newproc == NULL) {
+        return ENOMEM;  /* Sufficient virtual memory for the new process was not available. */
+    }
 
-  /* done here as we need to duplicate the address space 
-     of thbe current process */
-  as_copy(curproc->p_addrspace, &(newp->p_addrspace));
-  if(newp->p_addrspace == NULL){
-    proc_destroy(newp); 
-    return ENOMEM;
-  }
+    /* COPYING ADDRESS SPACE */
+    int err = as_copy(curproc->p_addrspace, &(newproc->p_addrspace));
+    if (err) {
+        proc_destroy(newproc);
+        return err;
+    }
 
-  proc_file_table_copy(newp,curproc);
+    /* COPYING PARENT'S TRAPFRAME */
+    struct trapframe *tf_child = (struct trapframe *) kmalloc(sizeof(struct trapframe));
+    if(tf_child == NULL){
+        proc_destroy(newproc);
+        return ENOMEM; 
+    }
+    memmove(tf_child, ctf, sizeof(struct trapframe));
 
-  /* we need a copy of the parent's trapframe */
-  tf_child = kmalloc(sizeof(struct trapframe));
-  if(tf_child == NULL){
-    proc_destroy(newp);
-    return ENOMEM; 
-  }
-  memcpy(tf_child, ctf, sizeof(struct trapframe));
+    /* TO BE DONE: linking parent/child, so that child terminated on parent exit */
+    /*DEBUGGING PURPOSE*/
+    struct proc *father=curproc;
 
-  /* linking parent/child, so that child terminated 
-     on parent exit */
-  struct child_node *newChild = kmalloc(sizeof(struct child_node));
-  if(newChild == NULL) {
-    return ENOMEM;
-  }
-  // adding the child to the father child's list
-  newChild->p = newp;
-  newChild->next = curproc->p_children_list;
-  curproc->p_children_list = newChild;
-  // adding the father to the childre father's list
-  newp->p_father_proc = curproc;
+    /*ADDING NEW CHILD TO FATHER*/
+    if(add_new_child(father, newproc->p_pid)==-1){
+        proc_destroy(newproc);
+        return ENOMEM; 
+    }
 
-  result = thread_fork(
-     curthread->t_name, newp,
-     call_enter_forked_process, 
-     (void *)tf_child, (unsigned long)0/*unused*/);
 
-  if (result){
-    proc_destroy(newp);
-    kfree(tf_child);
-    return ENOMEM;
-  }
+    /*LINKING CHILD TO FATHER*/
+    newproc->father_pid=father->p_pid;
 
-  *retval = newp->p_pid;
+    /* ADDING NEW PROCESS TO THE PROCESS TABLE */
+    err = add_newp((pid_t) index, newproc);
+    if (err == -1) {
+        return ENOMEM;
+    }
 
-  return 0;
+    /* CALLING THREAD FORK() AND START NEW THREAD ROUTINE */
+    err = thread_fork(
+        curthread->t_name,                  /* same name as the parent  */
+        newproc,                            /* newly created process    */      
+        call_enter_forked_process,          /* routine to start         */
+        (void *) tf_child,                  /* child trapframe          */
+        (unsigned long) 0                   /* unused                   */
+    );
+
+    if (err) {
+        proc_destroy(newproc);
+        kfree(tf_child);
+        return err;
+    }
+
+    /* TASK COMPLETED SUCCESSFULLY */
+    *retval = newproc->p_pid;      // parent return pid of child
+    return 0;
 }
 #endif

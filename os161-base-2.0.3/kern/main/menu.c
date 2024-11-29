@@ -45,6 +45,7 @@
 #include <test.h>
 #include "opt-sfs.h"
 #include "opt-net.h"
+#include <current.h>
 
 /*
  * In-kernel menu and command dispatcher.
@@ -123,6 +124,19 @@ common_prog(int nargs, char **args)
 		return ENOMEM;
 	}
 
+#if OPT_SHELL
+
+	/*ADDING NEW CHILD TO FATHER*/
+    if(add_new_child(curproc, proc->p_pid)==-1){
+        proc_destroy(proc);
+        return ENOMEM; 
+    }
+
+
+    /*LINKING CHILD TO FATHER*/
+    proc->father_pid=curproc->p_pid;
+#endif
+
 	result = thread_fork(args[0] /* thread name */,
 			proc /* new process */,
 			cmd_progthread /* thread function */,
@@ -133,13 +147,18 @@ common_prog(int nargs, char **args)
 		return result;
 	}
 
-	int exit_code = proc_wait(proc);
-	kprintf("Process terminated with exit code: %d\n", exit_code);
-
-	/*
-	 * The new process will be destroyed when the program exits...
-	 * once you write the code for handling that.
-	 */
+#if OPT_SHELL
+	pid_t pid = proc->p_pid;
+	int exitstatus;
+	pid_t returnpid;
+	kprintf("[!] %d is waiting for %d...\n", curproc->p_pid, pid);
+	int err = sys_waitpid(pid, &exitstatus, 0, &returnpid);
+	if (err != 0) {
+		return err;
+	} else {
+		kprintf("[!] process %d terminated with exit status %d\n", pid, exitstatus);
+	}
+#endif
 
 	return 0;
 }

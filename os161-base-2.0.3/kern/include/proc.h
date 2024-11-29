@@ -34,10 +34,6 @@ struct vnode;
  */
 
 #if OPT_SHELL
-#define USE_SEMAPHORE_FOR_WAITPID 1
-#endif
-
-#if OPT_SHELL
 /* system open file table */
 struct openfile {
   struct vnode *vn;
@@ -49,13 +45,9 @@ struct openfile {
 #endif
 
 #if OPT_SHELL
-struct thread_node{ //It's used in order to know the threads belonging to a process, so that we can terminate them all in case a bad instruction is hit 
-	struct thread *t;
-	struct thread_node *next;
-};
-struct child_node{ //To keep track of childs of the process
-	struct proc *p;
-	struct child_node *next;
+struct child_list{ //To keep track of childs of the process
+	pid_t pid;
+	struct child_list *next;
 };
 #endif 
 
@@ -72,18 +64,12 @@ struct proc {
 
   /* add more material here as needed */
 #if OPT_SHELL
-        struct thread_node *p_thread_list; //head of the list of threads 
-		    struct child_node *p_children_list; //head of the list of children for a process, kept to terminate them on exit
-		    struct proc *p_father_proc; //pointer to the proc structure of the father (if any)
         int p_status;                   /* status as obtained by exit() */
         pid_t p_pid;                    /* process pid */
-        int p_terminated; //added to verify if a process terminated
-#if USE_SEMAPHORE_FOR_WAITPID
-  struct semaphore *p_sem;
-#else
+		    struct child_list *child_list; //head of the list of children for a process, kept to terminate them on exit
+        pid_t father_pid;
         struct cv *p_cv;
-        struct lock *p_lock;
-#endif
+        struct lock *p_locklock;
   struct openfile *fileTable[OPEN_MAX];
 #endif
 };
@@ -112,15 +98,14 @@ struct addrspace *proc_getas(void);
 /* Change the address space of the current process, and return the old one. */
 struct addrspace *proc_setas(struct addrspace *);
 
-/* wait for process termination, and return exit status */
-int proc_wait(struct proc *proc);
-/* get proc from pid */
+int get_valid_pid(void);
+int add_newp(pid_t pid, struct proc *proc);
+void remove_proc(pid_t pid);
+void call_enter_forked_process(void *tfv, unsigned long dummy);
 struct proc *proc_search_pid(pid_t pid);
-/* signal end/exit of process */
-void proc_signal_end(struct proc *proc);
-void proc_file_table_copy(struct proc *psrc, struct proc *pdest);
-int check_is_child(pid_t pid);
-int proc_verify_pid(void);
-struct proc * check_is_terminated(struct proc *p);
+int add_new_child(struct proc* proc, pid_t child_pid);
+int delete_child_list(struct proc* proc);
+int remove_child_from_list(struct proc* proc, pid_t child_pid);
+int is_child(struct proc* proc, pid_t child_pid);
 
 #endif /* _PROC_H_ */

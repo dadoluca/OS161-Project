@@ -71,13 +71,12 @@ int sys_write(int fd, userptr_t buf, size_t size, int *retval);
 int sys_read(int fd, userptr_t buf, size_t size, int* retval);
 int sys_dup2(int old_fd, int new_fd, int* retval);
 int sys_lseek(int fd, off_t pos, int whence, int64_t* retval);
-int sys_chdir(const char *path);
+int sys_chdir(const char *pathname);
 int sys_getcwd(const char *buf, size_t buflen, int *retval);
 void sys__exit(int status);
 pid_t sys_getpid(pid_t* retval);
 int sys_fork(struct trapframe *ctf, pid_t *retval);
-int sys_waitpid(pid_t pid, userptr_t statusp, int options, int *retval);
-int sys_chdir(const char *pathname);
+int sys_waitpid(pid_t pid, int *status, int options, int *retval);
 #endif
 
 #endif /* _SHELL_ */

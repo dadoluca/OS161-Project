@@ -180,7 +180,7 @@ syscall(struct trapframe *tf)
       case SYS_waitpid:
         err = sys_waitpid(
           (pid_t)tf->tf_a0,
-          (userptr_t)tf->tf_a1,
+          (int *)tf->tf_a1,
           (int)tf->tf_a2,
           &retval);
         
