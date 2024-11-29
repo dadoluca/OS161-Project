@@ -119,7 +119,7 @@ struct proc *proc_search_pid(pid_t pid) {
 #endif
 
 #if OPT_SHELL
-static int std_init(struct proc *proc, int fd, int mode) {
+static int std_init(const char *name, struct proc *proc, int fd, int mode) {
 
 	/* ASSIGNMENT OF THE CONSOLE NAME */
 	char *con = kstrdup("con:");
@@ -145,7 +145,7 @@ static int std_init(struct proc *proc, int fd, int mode) {
 
 	/* INITIALIZATION OF VALUES */
 	proc->fileTable[fd]->offset = 0;
-	proc->fileTable[fd]->lock = lock_create("std");
+	proc->fileTable[fd]->lock = lock_create(name);
 	if (proc->fileTable[fd]->lock == NULL) {
 		vfs_close(proc->fileTable[fd]->vn);
 		kfree(proc->fileTable[fd]);
@@ -421,11 +421,11 @@ proc_create_runprogram(const char *name)
 
 #if OPT_SHELL
 	/* CONSOLE INITIALIZATION FOR STDIN, STDOUT AND STDERR */
-	if (std_init(newproc, 0, O_RDONLY) == -1) {
+	if (std_init("STDIN", newproc, 0, O_RDONLY) == -1) {
 		return NULL;
-	} else if (std_init(newproc, 1, O_WRONLY) == -1) {
+	} else if (std_init("STDOUT", newproc, 1, O_WRONLY) == -1) {
 		return NULL;
-	} else if (std_init(newproc, 2, O_WRONLY) == -1) {
+	} else if (std_init("STDERR", newproc, 2, O_WRONLY) == -1) {
 		return NULL;
 	}
 #endif
