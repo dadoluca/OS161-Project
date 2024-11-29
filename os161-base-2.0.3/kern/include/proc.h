@@ -33,8 +33,8 @@ struct vnode;
  * without sleeping.
  */
 
-#if OPT_SHELL
 /* system open file table */
+#if OPT_SHELL
 struct openfile {
   struct vnode *vn;
   off_t offset;
@@ -44,8 +44,11 @@ struct openfile {
 };
 #endif
 
+/**
+ * @brief child_list, used to keep track of the child of a process
+ */
 #if OPT_SHELL
-struct child_list{ //To keep track of childs of the process
+struct child_list{
 	pid_t pid;
 	struct child_list *next;
 };
@@ -64,12 +67,12 @@ struct proc {
 
   /* add more material here as needed */
 #if OPT_SHELL
-        int p_status;                   /* status as obtained by exit() */
-        pid_t p_pid;                    /* process pid */
-		    struct child_list *child_list; //head of the list of children for a process, kept to terminate them on exit
-        pid_t father_pid;
-        struct cv *p_cv;
-        struct lock *p_locklock;
+  int p_status;                   /* status as obtained by exit() */
+  pid_t p_pid;                    /* process pid */
+	struct child_list *child_list; //head of the list of children for a process, kept to terminate them on exit
+  pid_t father_pid;
+  struct cv *p_cv;
+  struct lock *p_locklock;
   struct openfile *fileTable[OPEN_MAX];
 #endif
 };
@@ -98,6 +101,7 @@ struct addrspace *proc_getas(void);
 /* Change the address space of the current process, and return the old one. */
 struct addrspace *proc_setas(struct addrspace *);
 
+#if OPT_SHELL
 int get_valid_pid(void);
 int add_newp(pid_t pid, struct proc *proc);
 void remove_proc(pid_t pid);
@@ -107,5 +111,6 @@ int add_new_child(struct proc* proc, pid_t child_pid);
 int delete_child_list(struct proc* proc);
 int remove_child_from_list(struct proc* proc, pid_t child_pid);
 int is_child(struct proc* proc, pid_t child_pid);
+#endif
 
 #endif /* _PROC_H_ */

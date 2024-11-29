@@ -13,4 +13,5 @@ proc_syscalls.o: ../../syscall/proc_syscalls.c ../../include/types.h \
  ../../include/addrspace.h ../../include/vm.h includelinks/machine/vm.h \
  opt-dumbvm.h includelinks/mips/trapframe.h ../../include/current.h \
  includelinks/machine/current.h ../../include/synch.h \
- ../../include/kern/wait.h
+ ../../include/kern/wait.h ../../include/exec.h \
+ ../../include/kern/fcntl.h

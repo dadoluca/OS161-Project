@@ -115,51 +115,61 @@ syscall(struct trapframe *tf)
       /* Add stuff here */
 #if OPT_SHELL
       case SYS_open:
-          err = sys_open(
-            (userptr_t)tf->tf_a0,
-            (int)tf->tf_a1,
-            (mode_t)tf->tf_a2,
-            &retval);
+        err = sys_open(
+          (userptr_t)tf->tf_a0,
+          (int)tf->tf_a1,
+          (mode_t)tf->tf_a2,
+          &retval);
         break;
+
       case SYS_close:
-          err = sys_close((int)tf->tf_a0);
-          break;
+        err = sys_close((int)tf->tf_a0);
+        break;
+
       case SYS_remove:
-        /* just ignore: do nothing */
-          retval = 0;
+        err = 0;
         break;
+
       case SYS_write:
-          err = sys_write(
-            (int)tf->tf_a0,
-            (userptr_t)tf->tf_a1,
-            (size_t)tf->tf_a2,
-            &retval);
+        err = sys_write(
+          (int)tf->tf_a0,
+          (userptr_t)tf->tf_a1,
+          (size_t)tf->tf_a2,
+          &retval);
         break;
+
       case SYS_read:
-          err = sys_read(
-            (int)tf->tf_a0,
-            (userptr_t)tf->tf_a1,
-            (size_t)tf->tf_a2,
-            &retval);
+        err = sys_read(
+          (int)tf->tf_a0,
+          (userptr_t)tf->tf_a1,
+          (size_t)tf->tf_a2,
+          &retval);
         break;
+
       case SYS_dup2:
         err = sys_dup2(
           (int) tf->tf_a0,
           (int) tf->tf_a1,
           &retval);
-      break;
+        break;
+
+      /* added for the dup2 implementation */
+      case SYS_fstat:
+        err = 0;
+        break;
+
       case SYS_chdir:
         err = sys_chdir(
-          (char *) tf->tf_a0
-        );
-		  break;   
+          (char *) tf->tf_a0);
+		    break;
+
       case SYS___getcwd:
         err = sys_getcwd(
           (char *) tf->tf_a0,
           (size_t) tf->tf_a1,
-          &retval
-        );
-		  break;     
+          &retval);
+		    break;
+
       case SYS_lseek:
         pos = tf->tf_a2;
         pos <<= 32;
@@ -170,35 +180,34 @@ syscall(struct trapframe *tf)
           *(int32_t *)(tf->tf_sp+16),
           &retval_64);
         break;
+
       case SYS__exit:
-          /* TODO: just avoid crash */
-           sys__exit((int)tf->tf_a0);
+        sys__exit((int)tf->tf_a0);
         break;
-      case SYS_fork:
-          err = sys_fork(tf,&retval);
-        break;
+
+      case SYS_getpid:
+		  	err = sys_getpid(
+		  		(pid_t *) &retval);
+		    break;
+
       case SYS_waitpid:
         err = sys_waitpid(
           (pid_t)tf->tf_a0,
           (int *)tf->tf_a1,
           (int)tf->tf_a2,
           &retval);
-        
         break;
 
+      case SYS_fork:
+          err = sys_fork(tf,&retval);
+          break;
 
-    case SYS_getpid:
-			err = sys_getpid(
-				(pid_t *) &retval
-			);
-		break;
-
-
+      case SYS_execv:
+		  	err = sys_execv(
+		  		(char *) tf->tf_a0,
+		  		(char **) tf->tf_a1);
+		    break;
     #endif
-
-
-
-
 
     default:
       kprintf("Unknown syscall %d\n", callno);

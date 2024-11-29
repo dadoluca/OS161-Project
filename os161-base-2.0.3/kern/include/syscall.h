@@ -63,6 +63,7 @@ int sys___time(userptr_t user_seconds, userptr_t user_nanoseconds);
 
 #if OPT_SHELL
 struct openfile;
+
 void openfileIncrRefCount(struct openfile *of);
 
 int sys_open(userptr_t path, int openflags, mode_t mode, int *errp);
@@ -70,13 +71,14 @@ int sys_close(int fd);
 int sys_write(int fd, userptr_t buf, size_t size, int *retval);
 int sys_read(int fd, userptr_t buf, size_t size, int* retval);
 int sys_dup2(int old_fd, int new_fd, int* retval);
-int sys_lseek(int fd, off_t pos, int whence, int64_t* retval);
 int sys_chdir(const char *pathname);
 int sys_getcwd(const char *buf, size_t buflen, int *retval);
+int sys_lseek(int fd, off_t pos, int whence, int64_t* retval);
 void sys__exit(int status);
 pid_t sys_getpid(pid_t* retval);
-int sys_fork(struct trapframe *ctf, pid_t *retval);
 int sys_waitpid(pid_t pid, int *status, int options, int *retval);
+int sys_fork(struct trapframe *ctf, pid_t *retval);
+int sys_execv(const char *progname, char *argv[]);
 #endif
 
 #endif /* _SHELL_ */
