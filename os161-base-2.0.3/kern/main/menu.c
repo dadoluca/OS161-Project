@@ -125,7 +125,6 @@ common_prog(int nargs, char **args)
 	}
 
 #if OPT_SHELL
-
 	/* adding a new child to the father */
     if(add_new_child(curproc, proc->p_pid)==-1){
         proc_destroy(proc);
@@ -134,7 +133,6 @@ common_prog(int nargs, char **args)
 
     /*linking child to the father */
     proc->father_pid=curproc->p_pid;
-
 #endif
 
 	result = thread_fork(args[0] /* thread name */,
@@ -148,7 +146,6 @@ common_prog(int nargs, char **args)
 	}
 
 #if OPT_SHELL
-
 	pid_t pid = proc->p_pid;
 	int exitstatus;
 	pid_t returnpid;
@@ -162,7 +159,6 @@ common_prog(int nargs, char **args)
 	} else {
 		kprintf("Process %d terminated with exit status: %d\n", pid, exitstatus);
 	}
-	
 #endif
 
 	return 0;

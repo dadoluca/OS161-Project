@@ -25,13 +25,15 @@ static struct _processTable {
  */
 struct proc *kproc;
 
-
-/*
- * Verify if there's a pid available for a new process to be created
+/**
+ * @brief get_valid_pid, used to find in the process table a valid pid for a new process
+ * 
+ * @return an error in case of failure or 0 in case of success
  */
 #if OPT_SHELL
 int get_valid_pid(void){
-  /* CHECKING SPACE AVAILABILITY IN PROCESS TABLE WITH CIRCULAR BUFFER */
+
+  /* checking space availability in process table */
 	int index = (processTable.last_pid + 1 > MAX_PROC) ? 1 : processTable.last_pid + 1;
 	while (index != processTable.last_pid) {
         if (processTable.proc[index] == NULL) {
@@ -42,99 +44,132 @@ int get_valid_pid(void){
         index = (index > MAX_PROC) ? 1 : index;
     }
 
-	/* POSITION NOT FOUND */
+	/* new position not found */
 	if (index == processTable.last_pid) {
         return -1; 
     }
 
-	/* POSITION FOUND */
 	return index;
 }
 #endif
 
+/**
+ * @brief add_newp, used to add a process to the process table
+ * 
+ * @param pid indicating the index in the process table where the process should be add
+ * @param proc is the process to be added
+ * 
+ * @return an error in case of failure or 0 in case of success
+ */
 #if OPT_SHELL
 int add_newp(pid_t pid, struct proc *proc) {
 
-	/* EVALUATING PARAMETERS */
+	/* checking if the inputs are valid */
 	if (pid <= 0 || pid > MAX_PROC +1 || proc == NULL) {
 		return -1;
 	}
 
-	/* ADDING PROCESS */
+	/* adding the process to the process table at index pid */
 	spinlock_acquire(&processTable.lk);
 	processTable.proc[pid] = proc;
 
-	/* UPDATE LAST PID POSITION */
+	/* updating the last pid */
 	processTable.last_pid = pid;
 	spinlock_release(&processTable.lk);
 
-	/* TASK COMPLETED SUCCESSFULLY */
 	return 0;
 }
 #endif
 
+/**
+ * @brief remove_proc, used to remove a process from the process table
+ * 
+ * @param pid used to identify the process into the process table
+ * 
+ * @return doesn't have any return value
+ */
 #if OPT_SHELL
 void remove_proc(pid_t pid) {
 
-	/* REMOVING PROCESS */
+	/* putting null at the specified index */
 	spinlock_acquire(&processTable.lk);
 	processTable.proc[pid] = NULL;
 	spinlock_release(&processTable.lk);
-
-
 }
 #endif
 
+/**
+ * @brief call_enter_forked_process, used to start the new thread
+ * 
+ * @param tfv is the trapframe of the new thread
+ * @param dummy is not used
+ * 
+ * @return doesn't have any return value
+ */
 #if OPT_SHELL
 void call_enter_forked_process(void *tfv, unsigned long dummy) {
 
 	(void) dummy;
 
-	/* CALLING BUILT-IN FUNCTION */
 	struct trapframe *tf = (struct trapframe *) tfv;
 	enter_forked_process(tf); 
 
-	/* SHOULD NOT GET HERE */
-	panic("[!] enter_forked_process() returned unexpectedly\n");
+	panic("- Error - while doing call_enter_forked_process()\n");
 }
 #endif
 
+/**
+ * @brief proc_search_pid, used to search a process into the process table by pid
+ * 
+ * @param pid to identify the process into the process table
+ * 
+ * @return the process associated to the pid
+ */
 #if OPT_SHELL
 struct proc *proc_search_pid(pid_t pid) {
 
-	/* CHECKING PID CONSTRAINTS */
+	/* checking if pid is valid */
 	if (pid <= 0 || pid > MAX_PROC) {
 		return NULL;
 	}
 
-	/* RETRIEVING PROCESS BASED ON THE INDEX PID */
+	/* retrieving the process by the pid */
 	struct proc *proc = processTable.proc[pid];
 	if (proc->p_pid != pid) {
 		return NULL;
 	}
 
-	/* TASK COMPLETED SUCCESSFULLY */
 	return proc;
 }
 #endif
 
+/**
+ * @brief std_init, used to initialize the std (standard) input, talking about stdin, stdout and stderr
+ * 
+ * @param name specifying which std
+ * @param proc is the process to consider
+ * @param fd is the file descriptor
+ * @param mode specifying in which mode open the file
+ * 
+ * @return -1 in case of failure or 0 in case of success
+ */
 #if OPT_SHELL
 static int std_init(const char *name, struct proc *proc, int fd, int mode) {
 
-	/* ASSIGNMENT OF THE CONSOLE NAME */
+	/* assigning the console name */
 	char *con = kstrdup("con:");
 	if (con == NULL) {
 		return -1;
 	}
 
-	/* ALLOCATING SPACE IN THE FILETABLE */
+	/* allocating space in the filetable */
 	proc->fileTable[fd] = (struct openfile *) kmalloc(sizeof(struct openfile));
 	if (proc->fileTable[fd] == NULL) {
 		kfree(con);
 		return -1;
 	}
 
-	/* OPENING ASSOCIATED FILE */
+	/* opening the file */
 	int err = vfs_open(con, mode, 0644, &proc->fileTable[fd]->vn);
 	if (err) {
 		kfree(con);
@@ -143,7 +178,7 @@ static int std_init(const char *name, struct proc *proc, int fd, int mode) {
 	}
 	kfree(con);
 
-	/* INITIALIZATION OF VALUES */
+	/* initializing all the values */
 	proc->fileTable[fd]->offset = 0;
 	proc->fileTable[fd]->lock = lock_create(name);
 	if (proc->fileTable[fd]->lock == NULL) {
@@ -158,14 +193,21 @@ static int std_init(const char *name, struct proc *proc, int fd, int mode) {
 }
 #endif
 
+/**
+ * @brief proc_init, used to add a process to the process table, getting its pid
+ * 
+ * @param proc is the specified process
+ * @param name which is the name of the process
+ * 
+ * @return -1 in case of failure or the pid of the added process in case of success
+ */
 #if OPT_SHELL
 static int proc_init(struct proc *proc, const char *name) {
 
-	/* ACQUIRING THE SPINLOCK */
 	spinlock_acquire(&processTable.lk);
 	proc->p_pid = -1;
 
-	/* SEARCH FREE INDEX IN THE TABLE USING CIRCULAR STRATEGY */
+	/* searching for a free inidex in the process table */
 	int index = processTable.last_pid + 1;
 	index = (index > MAX_PROC) ? 1 : index;		// skipping [0] (kernel process)
 	while (index != processTable.last_pid) {
@@ -179,76 +221,76 @@ static int proc_init(struct proc *proc, const char *name) {
 		index = (index > MAX_PROC) ? 1 : index;
 	}
 
-	/* RELEASING THE SPINLOCK */
 	spinlock_release(&processTable.lk);
+
 	if (proc->p_pid <= 0) {
 		return proc->p_pid;
 	}
 
-	/* PROCESS STATUS INITIALIZATION */
+	/* initializing the values */
 	proc->p_status = 0;
-
-	/*SETTING FATHER PID AS -1*/
-	/*FOR THE FIRST PROCESS IT WILL NOT BE CHANGED*/
+	/* the first process has no father */
 	proc->father_pid=-1;
-
-	/*PROCESS CHILDREN LIST INITIALIZATION*/
 	proc->child_list= NULL;
-
-	/* PROCESS CV AND LOCK INITIALIZATION */
 	proc->p_cv = cv_create(name);
   	proc->p_locklock = lock_create(name);
 	if (proc->p_cv == NULL || proc->p_locklock == NULL) {
 		return -1;
 	}
 
-	/* TASK COMPLETED SUCCESSFULLY */
 	return proc->p_pid;
 }
 #endif
 
-static int proc_deinit(struct proc *proc) {
+/**
+ * @brief proc_deinit, used to manage the process table when a process is destroyed
+ * 
+ * @param proc is the process that will be destroyed
+ * 
+ * @return -1 in case of failure or 0 in case of success
+ */
 #if OPT_SHELL
+static int proc_deinit(struct proc *proc) {
 	struct proc* parent_proc;
-	/* ACQUIRING THE SPINLOCK */
+
 	spinlock_acquire(&processTable.lk);
 
-	/* ACQUIRING PROCESS PID */
+	/* checking if pid is valid */
 	int index = proc->p_pid;
 	if (index <= 0 || index > MAX_PROC) {
 		return -1;
 	}
 
-	/* RELEASING ENTRY IN PROCESS TABLE */
+	/* releasing the entry in the process table */
 	processTable.proc[index] = NULL;
 
-	/* PROCESS CV AND LOCK DESTROY */
 	cv_destroy(proc->p_cv);
   	lock_destroy(proc->p_locklock);
 
-	/* RELEASING THE SPINLOCK */
 	spinlock_release(&processTable.lk);
 
-	/*DESTROYING THE CHILD LIST AND SETTING CHILDREN AS ORPHANS*/
-	if(delete_child_list(proc)==-1)
+	/* deleting the child list */
+	if (delete_child_list(proc)==-1) {
 		return -1;
+	}
 	
-	/*REMOVING THE PROCESS FROM THE CHILD LIST OF ITS PARENT*/
-	if(proc->father_pid!=-1){
+	/* removing the process as child for the father */
+	if (proc->father_pid!=-1) {
 		parent_proc=proc_search_pid(proc->father_pid);
-		if(proc->father_pid==kproc->p_pid)
-			parent_proc=kproc;			
-		if(parent_proc==NULL)
+		if (proc->father_pid==kproc->p_pid) {
+			parent_proc=kproc;
+		}			
+		if (parent_proc==NULL) {
 			return -1;
-
-		if((remove_child_from_list(parent_proc, proc->p_pid)==-1))
+		}
+		if (remove_child_from_list(parent_proc, proc->p_pid)==-1) {
 			return -1;
+		}
 	}
 
-	/* TASK COMPLETED SUCCESSFULLY */
 	return 0;
-#endif
 }
+#endif
 
 static
 struct proc *
@@ -277,13 +319,9 @@ proc_create(const char *name)
 
 #if OPT_SHELL
 
-	/**
-	 * @brief Zeroing out the block of memory used by the process fileTable (i.e.
-	 * 		  initializing the struct).
-	 */
 	bzero(proc->fileTable, OPEN_MAX * sizeof(struct openfile*));
 
-	/* ADD PROCESS TO THE PROCESS TABLE */
+	/* adding the process to the process table */
 	if (strcmp(name, "[kernel]") != 0 && proc_init(proc, name) <= 0) {
 		kfree(proc);
 		return NULL;
@@ -372,7 +410,7 @@ proc_destroy(struct proc *proc)
 
 #if OPT_SHELL
 	if (proc_deinit(proc) != 0) {
-		panic("[ERROR] some errors occurred in the management of the process table\n");
+		panic("- Error - while doing proc_destroy()\n");
 	}
 #endif
 
@@ -392,14 +430,21 @@ proc_bootstrap(void)
 
 	/* USER PROCESS INITIALIZATION (TABLE) */
 #if OPT_SHELL
-	spinlock_init(&processTable.lk);	/* lock initialization 								*/
-	processTable.proc[0] = kproc;		/* registering kernel process in the process table 	*/
+	spinlock_init(&processTable.lk);
+
+	/* registering kernel process in the process table 	*/
+	processTable.proc[0] = kproc;
+
 	KASSERT(processTable.proc[0] != NULL);
+
+	/* setting all (not the first one) the process table's entry to NULL */
 	for (int i = 1; i <= MAX_PROC; i++) {
 		processTable.proc[i] = NULL;
 	}
-	processTable.active = true;		/* activating the process table 					*/
-	processTable.last_pid = 0;			/* last used PID 									*/
+
+	/* activating the process table */
+	processTable.active = true;		
+	processTable.last_pid = 0;
 #endif
 }
 
@@ -420,7 +465,7 @@ proc_create_runprogram(const char *name)
 	/* VFS fields */
 
 #if OPT_SHELL
-	/* CONSOLE INITIALIZATION FOR STDIN, STDOUT AND STDERR */
+	/* doing the standard input initialization */
 	if (std_init("STDIN", newproc, 0, O_RDONLY) == -1) {
 		return NULL;
 	} else if (std_init("STDOUT", newproc, 1, O_WRONLY) == -1) {
@@ -513,9 +558,17 @@ proc_setas(struct addrspace *newas)
 	return oldas;
 }
 
+/**
+ * @brief add_new_child, used to add a new child to the child_list of the process
+ * 
+ * @param proc is the current process
+ * @param child_pid is the pid of the child to add to the father (current process)
+ * 
+ * @return -1 in case of failure or 0 in case of success
+ */
 #if OPT_SHELL
 int add_new_child(struct proc* proc, pid_t child_pid){
-	struct child_list* app=proc->child_list;
+	struct child_list* c_list=proc->child_list;
 
 	if(proc->child_list==NULL){
 		proc->child_list=(struct child_list *) kmalloc(sizeof(struct child_list));
@@ -524,83 +577,102 @@ int add_new_child(struct proc* proc, pid_t child_pid){
 		proc->child_list->next=NULL;
 		proc->child_list->pid=child_pid;
 		return 0;
-	}
-		
+	}	
 
-	while(app->next!=NULL){
-		app=app->next;
+	while(c_list->next!=NULL){
+		c_list=c_list->next;
 	}
 
-	app->next=(struct child_list *) kmalloc(sizeof(struct child_list));
-	if(app->next==NULL)
+	c_list->next=(struct child_list *) kmalloc(sizeof(struct child_list));
+	if(c_list->next==NULL)
 		return -1;
-	app->next->next=NULL;
-	app->next->pid=child_pid;
+	c_list->next->next=NULL;
+	c_list->next->pid=child_pid;
 	return 0;
 }
 #endif
 
+/**
+ * @brief delete_child_list, used to delete a child_list of a process
+ * 
+ * @param proc is the process to delete the child_list
+ * 
+ * @return -1 in case of failure or 0 in case of success
+ */
 #if OPT_SHELL
 int delete_child_list(struct proc* proc){
-	struct child_list* app=proc->child_list;
+	struct child_list* c_list=proc->child_list;
 	struct proc* child_proc;
 
+	while(c_list!=NULL){
+		proc->child_list=c_list->next;
 
-	while(app!=NULL){
-		proc->child_list=app->next;
-
-		/*FINDING THE CHILD STRUCTURE*/
-		child_proc=proc_search_pid(app->pid);
+		/* finding the child process */
+		child_proc=proc_search_pid(c_list->pid);
 		if(child_proc==NULL)
 			return -1;
 
-		/*SETTING THE PARENT PID AS -1*/	
+		/* removing a father at the child process */	
 		child_proc->father_pid=-1;
 
-		/*REMOVING THE CHILD*/
-		app->next=NULL;
-		kfree(app);
+		/* removing the child at the father process */
+		c_list->next=NULL;
+		kfree(c_list);
 
-		app=proc->child_list;
+		c_list=proc->child_list;
 	}
 	
 	return 0;
 }
 #endif
 
+/**
+ * @brief remove_child_from_list, used to remove a process from the child_list
+ * 
+ * @param proc is the process where we want to remove a child
+ * @param child_pid is the pid that identify the process to remove from the list
+ * 
+ * @return -1 in case of failure or 0 in case of success
+ */
 #if OPT_SHELL
 int remove_child_from_list(struct proc* proc, pid_t child_pid){
-	struct child_list* app=proc->child_list;
+	struct child_list* c_list=proc->child_list;
 	struct child_list* prev_child=NULL;
 
-
-	while(app!=NULL){
-		if(app->pid==child_pid){
+	while(c_list!=NULL){
+		if(c_list->pid==child_pid){
 			if(prev_child==NULL)
-				proc->child_list=app->next;
+				proc->child_list=c_list->next;
 			else
-				prev_child->next=app->next;
-			kfree(app);
+				prev_child->next=c_list->next;
+			kfree(c_list);
 			return 0;
 		}
-		prev_child=app;
-		app=app->next;
+		prev_child=c_list;
+		c_list=c_list->next;
 	}
 	
 	return -1;
 }
 #endif
 
+/**
+ * @brief is_child, used to verify if a process is the child of another process
+ * 
+ * @param proc is the father process
+ * @param child_pid is the pid that identify a process
+ * 
+ * @return -1 in case of failure or 0 in case of success
+ */
 #if OPT_SHELL
 int is_child(struct proc* proc, pid_t child_pid){
-	struct child_list* app=proc->child_list;
+	struct child_list* c_list=proc->child_list;
 
-
-	while(app!=NULL){
-		if(app->pid==child_pid){
+	while(c_list!=NULL){
+		if(c_list->pid==child_pid){
 			return 0;
 		}
-		app=app->next;
+		c_list=c_list->next;
 	}
 	
 	return -1;

@@ -64,8 +64,6 @@ int sys___time(userptr_t user_seconds, userptr_t user_nanoseconds);
 #if OPT_SHELL
 struct openfile;
 
-void openfileIncrRefCount(struct openfile *of);
-
 int sys_open(userptr_t path, int openflags, mode_t mode, int *errp);
 int sys_close(int fd);
 int sys_write(int fd, userptr_t buf, size_t size, int *retval);

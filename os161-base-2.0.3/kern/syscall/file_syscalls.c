@@ -28,18 +28,23 @@
 
 struct openfile systemFileTable[SYSTEM_OPEN_MAX];
 
-void openfileIncrRefCount(struct openfile *of) {
-  if (of!=NULL)
-    of->countRef++;
-}
-
+/**
+ * @brief sys_write, used to write bytes into a file
+ * 
+ * @param fd used to specify the file to write in
+ * @param buf containing data
+ * @param size used to specify the number of bytes to be written
+ * @param retval used to return the number of written bytes
+ * 
+ * @return an error in case of failure or 0 in case of success
+ */
 #if OPT_SHELL
 int sys_write(int fd, userptr_t buf, size_t size, int *retval) {
   struct iovec iov;
   struct uio ku;
   struct vnode *vn;
   struct openfile *of;
-  int result, nwrite;
+  int err, nwrite;
   void *kbuf;
 
   /* checking if fd is valid */
@@ -80,10 +85,10 @@ int sys_write(int fd, userptr_t buf, size_t size, int *retval) {
   uio_kinit(&iov, &ku, kbuf, size, of->offset, UIO_WRITE);
 
   /* performing the write operation */
-  result = VOP_WRITE(vn, &ku);
-  if (result) {
+  err = VOP_WRITE(vn, &ku);
+  if (err) {
       kfree(kbuf);
-      return result;
+      return err;
   }
   /* freeing the kernel buffer */
   kfree(kbuf);
@@ -101,13 +106,23 @@ int sys_write(int fd, userptr_t buf, size_t size, int *retval) {
 }
 #endif
 
+/**
+ * @brief sys_read, used to read bytes from a file
+ * 
+ * @param fd used to specify the file to read
+ * @param buf containing data
+ * @param size used to specify the number of bytes to be read
+ * @param retval used to return the number of read bytes
+ * 
+ * @return an error in case of failure or 0 in case of success
+ */
 #if OPT_SHELL
 int sys_read(int fd, userptr_t buf, size_t size, int *retval) {
     struct iovec iov;
     struct uio ku;
     struct vnode *vn;
     struct openfile *of;
-    int result, nread;
+    int err, nread;
     void *kbuf;
 
     /* checking if fd is valid */
@@ -148,10 +163,10 @@ int sys_read(int fd, userptr_t buf, size_t size, int *retval) {
     uio_kinit(&iov, &ku, kbuf, size, of->offset, UIO_READ);
 
     /* performing the read operation */
-    result = VOP_READ(vn, &ku);
-    if (result) {
+    err = VOP_READ(vn, &ku);
+    if (err) {
       kfree(kbuf);
-      return result;
+      return err;
     }
 
     /* updating the file offset based on the number of bytes read */
@@ -176,13 +191,18 @@ int sys_read(int fd, userptr_t buf, size_t size, int *retval) {
 }
 #endif
 
-/*
- * file system calls for open/close
+/**
+ * @brief sys_open, used to open a file
+ * 
+ * @param path specifying the relative or absolute pathname of the file
+ * @param openflags specifying how to open the file
+ * @param mode
+ * @param retval returning the fd (the slot in the process table)
+ * 
+ * @return an error in case of failure or 0 in case of success 
  */
 #if OPT_SHELL
-int
-sys_open(userptr_t path, int openflags, mode_t mode, int *retval)
-{
+int sys_open(userptr_t path, int openflags, mode_t mode, int *retval) {
   int fd, i;
   struct vnode *v;
   struct openfile *of=NULL;
@@ -304,13 +324,16 @@ sys_open(userptr_t path, int openflags, mode_t mode, int *retval)
 }
 #endif
 
-/*
- * file system calls for open/close
+/**
+ * @brief sys_close, used to close a file
+ * 
+ * @param fd specifying the file descriptor
+ * 
+ * @return an error in case of failure or 0 in case of success 
  */
 #if OPT_SHELL
-int
-sys_close(int fd)
-{
+int sys_close(int fd) {
+
   /* checking if fd is valid and refers to a valid entry of the file table */
   if (fd < 0 || fd >= OPEN_MAX || curproc->fileTable[fd] == NULL) {
     return EBADF;       
@@ -342,31 +365,40 @@ sys_close(int fd)
 }
 #endif
 
+/**
+ * @brief sys_dup2, used to clone the file handle old_fd onto the file handle new_fd
+ * 
+ * @param old_fd specifying the old file descriptor
+ * @param new_fd specifying the new file descriptor
+ * @param retval returning the file descriptor
+ * 
+ * @return an error in case of failure or 0 in case of success
+ */
 #if OPT_SHELL
 int sys_dup2(int old_fd, int new_fd, int *retval) {
-  struct openfile *of;
 
   /* checking if the curproc is valid */
   KASSERT(curproc != NULL);
 
-  /* validate input arguments */
+  struct openfile *of;
+
+  /* checking if the inputs are valid */
   if (old_fd < 0 || old_fd >= OPEN_MAX || new_fd < 0 || new_fd >= OPEN_MAX) {
-    /* fd must be in the valid range [0, OPEN_MAX] */
-    return EBADF;   // invalid file handler
+    return EBADF;
   } else if (curproc->fileTable[old_fd] == NULL) {
-    /* the old fd must refer to an open file */
-    return EBADF;   // invalid file handler
+    return EBADF;
   } else if (old_fd == new_fd) {
-      /* the two handles refer to the same "open" of the file - that is, they are references to the same object and share the same seek pointer */
-    *retval = old_fd; //return value
+    /* the two handles refer to the same "open" of the file, they are references to the same object and share the same seek pointer */
+    *retval = old_fd;
     return 0; 
-  } 
-  /* check if new_fd refers to an open file */
+  }
+
+  /* checking if new_fd refers to an open file */
   if (curproc->fileTable[new_fd] != NULL) {
-    /* close the file currently associated with new_fd */
+    /* closing the file currently associated with new_fd */
     of = curproc->fileTable[new_fd];
 
-    /* acquire the lock */
+    /* acquiring the lock */
     lock_acquire(of->lock);
 
     curproc->fileTable[new_fd] = NULL;
@@ -378,20 +410,19 @@ int sys_dup2(int old_fd, int new_fd, int *retval) {
       /* close the vnode */
       vfs_close(vn);
     }
-    /* release the lock */
+
+    /* releasing the lock */
     lock_release(of->lock);
     of = NULL;
   }
 
-  /* increment of the count references */
   of = curproc->fileTable[old_fd];
-  /* acquire the lock */
   lock_acquire(of->lock);
+  /* incrementing the count reference */
   of->countRef++;
-  /* release the lock */
   lock_release(of->lock);
 
-  /* assignment  new_fd */
+  /* assigning to new_fd the content of the old_fd */
   curproc->fileTable[new_fd] = of;
 
   *retval = new_fd;
@@ -400,6 +431,16 @@ int sys_dup2(int old_fd, int new_fd, int *retval) {
 }
 #endif
 
+/**
+ * @brief sys_lseek, used to change the seek position
+ * 
+ * @param fd specifying the file descriptor (where to change the position)
+ * @param pos indicating the offset to apply
+ * @param whence flag used to indicate which operation perform (SEEK_SET, SEEK_CUR and SEEK_END)
+ * @param retval used to return the new seek position of the file
+ * 
+ * @return an error in case of failure or 0 in case of success
+ */
 #if OPT_SHELL
 int sys_lseek(int fd, off_t pos, int whence, int64_t* retval) {
 
@@ -410,8 +451,9 @@ int sys_lseek(int fd, off_t pos, int whence, int64_t* retval) {
   if(fd < 0 || fd >= OPEN_MAX || curproc->fileTable[fd] == NULL) {
     return EBADF;
   }
-  /* checking if the openfile associated to the fd is valid */
+
   struct openfile *of = curproc->fileTable[fd];
+  /* checking if the openfile associated to the fd is valid */
   if(of == NULL) {
     return EBADF;
   }
@@ -421,12 +463,11 @@ int sys_lseek(int fd, off_t pos, int whence, int64_t* retval) {
     return ESPIPE;
   }
 
-
   struct stat info;
   int err;
   int new_off;
 
-  /* take the lock */
+  /* acquiring the lock */
   lock_acquire(of->lock);
 
   /* switch for each different whence */
@@ -442,7 +483,6 @@ int sys_lseek(int fd, off_t pos, int whence, int64_t* retval) {
     /* setting position as position + pos */
     case SEEK_CUR:
       if (pos < 0 && -pos > of->offset) {
-        /* release the lock, bc there is an error */
         lock_release(of->lock);
         return EINVAL;
       }
@@ -452,7 +492,6 @@ int sys_lseek(int fd, off_t pos, int whence, int64_t* retval) {
     case SEEK_END:
       err = VOP_STAT(of->vn, &info);
       if (err) {
-        /* release the lock, bc there is an error */
         lock_release(of->lock);
         return err;
       }
@@ -461,8 +500,9 @@ int sys_lseek(int fd, off_t pos, int whence, int64_t* retval) {
         lock_release(of->lock);
         return EINVAL;
       }
-      new_off = info.st_size + pos; //TODO: check the sign
+      new_off = info.st_size + pos;
       break;
+
     default:
       lock_release(of->lock);
       return EINVAL;
@@ -471,89 +511,103 @@ int sys_lseek(int fd, off_t pos, int whence, int64_t* retval) {
   /* updating the offset */
   of->offset = new_off;
 
-  /* syscall finish, release the lock */
+  /* releasing the lock */
   lock_release(of->lock);
 
   *retval = new_off;
-  /* success */
+
   return 0;
 }
 #endif
 
+/**
+ * @brief sys_chdir, used to set the name of the current directory of the process to pathname
+ * 
+ * @param pathname indicating the name to give to the directory
+ * 
+ * @return an error in case of failure or 0 in case of success
+ */
 #if OPT_SHELL
 int sys_chdir(const char *pathname) {
 
-  /* create a buffer */
+  /* creating a buffer */
   char *kbuffer = (char *) kmalloc(PATH_MAX * sizeof(char));
   if (kbuffer == NULL) {
     return ENOMEM;
   }
 
-  /* create a space */
-  int result = copyinstr((const_userptr_t) pathname, kbuffer, PATH_MAX, NULL);
-  if (result) {
+  /* creating a kernel space */
+  int err = copyinstr((const_userptr_t) pathname, kbuffer, PATH_MAX, NULL);
+  if (err) {
     kfree(kbuffer);
-    /* Return an error if copyinstr encounter a problem it could be EFAULT */
-    return result;
+    return err;
   }
 
-  /* Set vnode to represent the directory */
   struct vnode *vn = NULL;
-  /* Open dir pointed by pathname */
-  result = vfs_open(kbuffer, O_RDONLY, 0644, &vn);
-  if (result) {
+
+  /* opening the directory pointed by pathname */
+  err = vfs_open(kbuffer, O_RDONLY, 0644, &vn);
+  if (err) {
       kfree(kbuffer);
-      return result;  /* return the error from the function vfs_open*/
+      return err;
   }
   kfree(kbuffer);
 
-  /* Change current dir */
-  result = vfs_setcurdir(vn);
-  if (result) {
+  /* changing the current directory */
+  err = vfs_setcurdir(vn);
+  if (err) {
       vfs_close(vn);
-      return result;
+      return err;
   }
 
-  /* Close the vn because no longer needed. Dir already set */
+  /* closing the vn because no longer needed. Directory is already set */
   vfs_close(vn);
-  /* success */
+
   return 0;
 }
 #endif
 
+/**
+ * @brief sys_getcwd, used to store the name of the current directory
+ * 
+ * @param buf used as buffer to contain the computed name
+ * @param buflen specifying the length of the buffer
+ * @param retval used to return actual length of the stored data
+ * 
+ * @return an error in case of failure or 0 in case of success
+ */
 #if OPT_SHELL
 int sys_getcwd(const char *buf, size_t buflen, int *retval) {
 
-    /* check if the curproc is valid*/
-    KASSERT(curthread != NULL);
-    KASSERT(curthread->t_proc != NULL);
+  KASSERT(curthread != NULL);
+  KASSERT(curthread->t_proc != NULL);
 
-    //* Initialize a UIO structure for user-space buffer interaction */
-    struct uio u;
-    struct iovec iov;
+  /* initializing an UIO structure for user-space buffer interaction */
+  struct uio u;
+  struct iovec iov;
 
-    /* Set up the I/O vector with the user-provided buffer and its length */
-    iov.iov_ubase = (userptr_t) buf;            
-    iov.iov_len = buflen;
+  /* setting up the I/O vector with the user-provided buffer and its length */
+  iov.iov_ubase = (userptr_t) buf;            
+  iov.iov_len = buflen;
 
-    /* Configure the UIO structure for reading into user space */
-    u.uio_iov = &iov;
-    u.uio_iovcnt = 1;
-    u.uio_resid = buflen;
-    u.uio_offset = 0;
-    u.uio_segflg = UIO_USERSPACE;
-    u.uio_rw = UIO_READ;
-    u.uio_space = curthread->t_proc->p_addrspace;
+  /* configuring the UIO structure for reading into user space */
+  u.uio_iov = &iov;
+  u.uio_iovcnt = 1;
+  u.uio_resid = buflen;
+  u.uio_offset = 0;
+  u.uio_segflg = UIO_USERSPACE;
+  u.uio_rw = UIO_READ;
+  u.uio_space = curthread->t_proc->p_addrspace;
 
-    /* Fetch the current working directory path using VFS */
-    int err = vfs_getcwd(&u);
-    if (err) {
-      return err;
-    }
+  /* fetching the current working directory path */
+  int err = vfs_getcwd(&u);
+  if (err) {
+    return err;
+  }
 
-    /* Calculate the length of the returned path */
-    *retval = buflen - u.uio_resid;
-    
-    return 0;
+  /* computing the length of the returned path */
+  *retval = buflen - u.uio_resid;
+  
+  return 0;
 }
 #endif
