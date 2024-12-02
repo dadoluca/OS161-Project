@@ -202,14 +202,14 @@ int sys_read(int fd, userptr_t buf, size_t size, int *retval) {
  * @return an error in case of failure or 0 in case of success 
  */
 #if OPT_SHELL
-int sys_open(userptr_t path, int openflags, mode_t mode, int *retval) {
+int sys_open(userptr_t pathname, int openflags, mode_t mode, int *retval) {
   int fd, i;
   struct vnode *v;
   struct openfile *of=NULL;
   size_t len;
 
   /* checking if path is valid */
-  if (path == NULL || path == (userptr_t)0) {
+  if (pathname == NULL || pathname == (userptr_t)0) {
     return EFAULT;
   }
 
@@ -220,14 +220,14 @@ int sys_open(userptr_t path, int openflags, mode_t mode, int *retval) {
   }
 
   /* copying the file path from the user to the kernel buffer */
-  int err = copyinstr((const_userptr_t) path, kbuffer, PATH_MAX, &len); // may return EFAULT
+  int err = copyinstr((const_userptr_t) pathname, kbuffer, PATH_MAX, &len); // may return EFAULT
   if (err) {
     kfree(kbuffer);
     return EFAULT;
   }
 
   /* making sure that the path is not in the kernel address space */
-  if((vaddr_t)path >= 0x80000000) {
+  if((vaddr_t)pathname >= 0x80000000) {
     kfree(kbuffer);
     return EFAULT;
   }
